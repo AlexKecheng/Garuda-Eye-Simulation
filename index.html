@@ -1,0 +1,314 @@
+<!-- c:\Users\ROG STRIX\PROJEK BANGSA\garuda-eye-simulation\index.html -->
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Pertahanan Udara - Garuda Eye</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0b1026;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #e0e0e0;
+        }
+
+        /* Canvas Fullscreen */
+        #sceneCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* UI Overlay Layer */
+        #uiLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            /* Klik tembus ke canvas */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #03dac6;
+            pointer-events: auto;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            color: #03dac6;
+            text-transform: uppercase;
+        }
+
+        .stats-panel span {
+            margin-left: 20px;
+            font-weight: bold;
+        }
+
+        /* Panels Container (Left & Right) */
+        .main-panels {
+            display: flex;
+            justify-content: space-between;
+            flex: 1;
+            padding: 10px;
+            overflow: hidden;
+        }
+
+        /* Sidebars */
+        .sidebar {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #333;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        /* Control Panel (Right) */
+        .right-panel {
+            align-items: flex-end;
+        }
+
+        /* Section Headers */
+        h2 {
+            font-size: 0.9rem;
+            border-bottom: 1px solid #555;
+            padding-bottom: 5px;
+            margin: 5px 0 10px 0;
+            color: #bbb;
+            text-transform: uppercase;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 5px;
+            border-bottom: 1px solid #444;
+        }
+
+        th {
+            color: #03dac6;
+        }
+
+        tr.selected-row {
+            background-color: rgba(3, 218, 198, 0.2);
+            border: 1px solid #03dac6;
+        }
+
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        }
+
+        /* Buttons & Inputs */
+        button {
+            background: #03dac6;
+            color: #000;
+            border: none;
+            padding: 8px 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #00b3a3;
+        }
+
+        button:disabled {
+            background: #555;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        button.danger {
+            background: #cf6679;
+            color: #fff;
+        }
+
+        select,
+        input[type="range"] {
+            width: 100%;
+            background: #222;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px;
+            margin-bottom: 5px;
+        }
+
+        /* Combat Log */
+        #combatLog {
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            height: 150px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            padding: 5px;
+            color: #ccc;
+        }
+
+        /* Radar Status Buttons */
+        .radar-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        .radar-btn {
+            flex: 1;
+            padding: 5px;
+            font-size: 0.7rem;
+            background: #03dac6;
+            border: none;
+            color: #000;
+            cursor: pointer;
+        }
+
+        /* Custom Scores Colors */
+        .score-high {
+            color: #cf6679;
+            font-weight: bold;
+        }
+
+        .score-med {
+            color: #ffeb3b;
+        }
+
+        .score-low {
+            color: #81c784;
+        }
+
+        /* Notification Area */
+        #recText {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            font-size: 1rem;
+            border-top: 2px solid #cf6679;
+            pointer-events: auto;
+        }
+    </style>
+
+    <!-- Load Three.js Libraries from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+
+<body>
+
+    <!-- 3D Scene Container -->
+    <canvas id="sceneCanvas"></canvas>
+
+    <!-- UI Overlay -->
+    <div id="uiLayer">
+        <!-- Top Header -->
+        <div class="top-bar">
+            <h1>GARUDA EYE <small style="font-size: 0.6em; opacity: 0.7;">AIR DEFENSE SYSTEM</small></h1>
+            <div class="stats-panel">
+                <span>KILLS: <span id="statKills" style="color:#03dac6">0</span></span>
+                <span>ACCURACY: <span id="statAccuracy" style="color:#ffeb3b">0%</span></span>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="main-panels">
+            <!-- Left Panel: Controls -->
+            <div class="sidebar">
+                <h2>Kontrol Sistem</h2>
+
+                <label>Radius Pertahanan (km): <span id="radiusValue">5.0</span></label>
+                <input type="range" id="defenseRadiusSlider" min="2" max="20" step="0.5" value="5">
+                <button id="applyLayoutButton">Update Formasi</button>
+
+                <div style="margin-top: 15px;"></div>
+                <h2>Status Radar</h2>
+                <div class="radar-controls">
+                    <button id="btnRadar0" class="radar-btn">R-1</button>
+                    <button id="btnRadar1" class="radar-btn">R-2</button>
+                    <button id="btnRadar2" class="radar-btn">R-3</button>
+                </div>
+
+                <div style="margin-top: 15px;"></div>
+                <h2>Senjata</h2>
+                <select id="weaponSelect">
+                    <option value="NASAMS">NASAMS (40km - Med)</option>
+                    <option value="VL MICA">VL MICA (20km - Short)</option>
+                    <option value="Starstreak">Starstreak (7km - VSHORAD)</option>
+                </select>
+                <div id="ammoDisplay" style="display: flex; gap: 5px; margin-bottom: 10px;"></div>
+                <button id="fireButton" class="danger" disabled>TEMBAK (FIRE)</button>
+
+                <div style="margin-top: 20px;"></div>
+                <button id="swarmButton" style="background:#ff9800;">⚠️ SIMULASI SWARM ATTACK</button>
+                <button id="resetButton" style="background:#444; color:#fff; margin-top:5px;">RESET SYSTEM</button>
+            </div>
+
+            <!-- Right Panel: Target List -->
+            <div class="sidebar" style="width: 350px;">
+                <h2>Daftar Ancaman (Track List)</h2>
+                <div style="flex: 1; overflow: auto; min-height: 200px;">
+                    <table id="targetTable">
+                        <thead>
+                            <tr>
+                                <th>TIPE</th>
+                                <th>JARAK</th>
+                                <th>SKOR</th>
+                                <th>STS</th>
+                                <th>KET</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Data populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <h2>Log Pertempuran</h2>
+                <div id="combatLog">Sistem Siap. Menunggu target...</div>
+            </div>
+        </div>
+
+        <!-- Bottom Notification -->
+        <div id="recText">MEMUAT SISTEM...</div>
+    </div>
+
+    <!-- Main Logic -->
+    <script src="simulation.js"></script>
+</body>
+
+</html>
