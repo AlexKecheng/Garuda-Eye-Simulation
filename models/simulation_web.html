@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Garuda Eye [3D]</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #03dac6;
+            margin-bottom: 10px;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* Map Styling */
+        #sceneCanvas {
+            width: 500px;
+            height: 500px;
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(3, 218, 198, 0.2);
+            cursor: grab;
+        }
+
+        /* Panel Info */
+        .panel {
+            flex: 1;
+            min-width: 350px;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            font-size: 0.9em;
+        }
+
+        th {
+            color: #bb86fc;
+        }
+
+        .score-high {
+            color: #cf6679;
+            font-weight: bold;
+        }
+
+        .score-med {
+            color: #ffb74d;
+        }
+
+        .score-low {
+            color: #81c784;
+        }
+
+        .recommendation-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(207, 102, 121, 0.1);
+            border: 1px solid #cf6679;
+            border-radius: 4px;
+            color: #cf6679;
+        }
+
+        /* Weapon Control Panel */
+        .weapon-panel {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .weapon-panel select,
+        .weapon-panel button {
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: #e0e0e0;
+            font-size: 1em;
+            margin-right: 10px;
+        }
+
+        .weapon-panel button {
+            background-color: #cf6679;
+            color: #121212;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .weapon-panel button:hover {
+            background-color: #ff799a;
+        }
+
+        .weapon-panel button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            color: #888;
+        }
+
+        #resetButton {
+            background-color: #03dac6;
+        }
+
+        #resetButton:hover {
+            background-color: #64ffda;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Garuda Eye: Tactical Simulation</h1>
+
+    <div class="container">
+        <!-- Visualisasi Peta -->
+        <canvas id="sceneCanvas"></canvas>
+
+        <!-- Panel Data -->
+        <div class="panel">
+            <h2 style="margin-top: 0;">Target Prioritas</h2>
+            <table id="targetTable">
+                <thead>
+                    <tr>
+                        <th>Tipe</th>
+                        <th>Jarak</th>
+                        <th>Skor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data akan masuk di sini -->
+                </tbody>
+            </table>
+
+            <div id="recBox" class="recommendation-box">
+                <strong>REKOMENDASI AKSI:</strong><br>
+                <span id="recText">Menunggu data sensor...</span>
+                <div id="combatLog" style="font-size: 0.8em; margin-top: 5px; color: #aaa;"></div>
+            </div>
+
+            <!-- Panel Kontrol Senjata -->
+            <div class="weapon-panel">
+                <h3 style="margin-top:0; color: #bb86fc;">Kontrol Senjata</h3>
+                <div id="ammoDisplay" style="display: flex; gap: 10px; margin-bottom: 15px;"></div>
+                <select id="weaponSelect">
+                    <option value="R-77">R-77 (BVR)</option>
+                    <option value="MICA">MICA-IR (WVR)</option>
+                    <option value="AIM-120">AIM-120 AMRAAM</option>
+                </select>
+                <button id="fireButton">TEMBAK</button>
+                <button id="resetButton">RESET</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three.js JS for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera movement -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- GLTFLoader for loading 3D models -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script>
+        // --- KONFIGURASI SIMULASI (Sama dengan Python) ---
+        const OBJECT_TYPES = ["drone", "helicopter", "airplane", "missile"];
+        const THREAT_SCORES = {
+            "missile": 100, "airplane": 80, "helicopter": 60, "drone": 40, "unknown": 10
+        };
+        // Jarak ditingkatkan agar lebih realistis untuk skala tempur udara
+        const SCENE_SCALE = 1 / 100; // Skala dunia 3D (1m di dunia nyata = 0.01 unit di 3D)
+        const RADAR_RANGE = 40000; // 40 km
+        const VISUAL_RANGE = 15000; // 15 km
+        const CRITICAL_RANGE = 5000; // 5 km (Game Over)
+        const SIM_TICK = 1000; // Update setiap 1 detik
+        // Konfigurasi Awal Amunisi
+        const INITIAL_AMMO = { "R-77": 8, "MICA": 12, "AIM-120": 6 };
+
+        // --- STATE SIMULASI ---
+        let systemTracks = []; // Apa yang dilihat oleh sistem (hasil fusi)
+        let realTargets = [];  // Ground Truth (Posisi asli objek di dunia nyata)
+        const mapCenter = [-7.25, 110.4]; // Konseptual, tidak lagi dipakai untuk render
+        let currentAmmo = { ...INITIAL_AMMO };
+        let isGameOver = false;
+        let simIntervalId;
+
+        // --- 3D SCENE STATE ---
+        let scene, camera, renderer, controls;
+        let targetMeshes = {}; // Menyimpan objek 3D untuk setiap target
+        const loader = new THREE.GLTFLoader();
+        const loadedModels = {}; // Cache untuk model yang sudah di-load
+        const modelPaths = {
+            "airplane": "models/airplane.glb",
+            "helicopter": "models/helicopter.glb",
+            "missile": "models/missile.glb",
+            "drone": "models/drone.glb",
+            "unknown": "models/unknown.glb" // Model fallback
+        };
+
+        // --- LOGIKA SIMULASI ---
+
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Fungsi Geometri (Dipindahkan ke atas untuk akses global)
+        // Fungsi ini tidak lagi relevan untuk render, tapi masih berguna untuk logika AI
+        function getBearingAndDistance(lat1, lon1, lat2, lon2) {
+            // NOTE: Fungsi ini sekarang hanya untuk kalkulasi non-visual (AI, sensor)
+            // Kita akan menggunakan posisi kartesius untuk rendering
+            const R = 6371e3;
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const d = R * c;
+
+            const y = Math.sin(Δλ) * Math.cos(φ2);
+            const x = Math.cos(φ1) * Math.sin(φ2) -
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+            const θ = Math.atan2(y, x);
+            const brng = (θ * 180 / Math.PI + 360) % 360;
+
+            return { distance: d, angle: brng };
+        }
+
+        // --- GROUND TRUTH (DUNIA NYATA) ---
+        function initRealWorld() {
+            // Spawn awal 3-5 target
+            for (let i = 0; i < getRandomInt(3, 5); i++) spawnTarget();
+        }
+
+        function spawnTarget() {
+            const angle = Math.random() * 360;
+            const angleRad = angle * (Math.PI / 180);
+            const dist = getRandomInt(10000, RADAR_RANGE - 5000);
+            const altitude = getRandomInt(1000, 8000); // Ketinggian 1-8 km
+
+            realTargets.push({
+                id: Math.random().toString(36).substr(2, 9),
+                type: OBJECT_TYPES[getRandomInt(0, OBJECT_TYPES.length - 1)],
+                // Posisi Kartesius 3D
+                x: Math.cos(angleRad) * dist,
+                y: altitude, // Ketinggian
+                z: Math.sin(angleRad) * dist, // Sumbu Z untuk kedalaman
+                speed: getRandomInt(100, 400), // m/s (sekitar 200-800 knots)
+                // Heading tidak lagi 2D, tapi vektor kecepatan
+                vx: 0, vy: 0, vz: 0
+            });
+
+            // Buat mesh 3D untuk target baru
+            createTargetMesh(realTargets[realTargets.length - 1]);
+        }
+
+        function updatePhysics(dtSeconds) {
+            if (isGameOver) return;
+
+            // Gerakkan target
+            realTargets.forEach(t => {
+                // AI Homing 3D: Arahkan ke titik (0, 0, 0)
+                const distanceToBase = Math.sqrt(t.x * t.x + t.y * t.y + t.z * t.z);
+
+                // Normalisasi vektor arah
+                const dirX = -t.x / distanceToBase;
+                const dirY = -t.y / distanceToBase;
+                const dirZ = -t.z / distanceToBase;
+
+                // Update kecepatan
+                t.vx = dirX * t.speed;
+                t.vy = dirY * t.speed;
+                t.vz = dirZ * t.speed;
+
+                t.x += t.vx * dtSeconds;
+                t.y += t.vy * dtSeconds;
+                t.z += t.vz * dtSeconds;
+
+                // Cek Game Over
+                if (distanceToBase < CRITICAL_RANGE) {
+                    triggerGameOver(t);
+                }
+            });
+
+            // Spawn musuh baru jika sepi
+            if (realTargets.length < 2 && Math.random() > 0.9) spawnTarget();
+        }
+
+        function triggerGameOver(target) {
+            isGameOver = true;
+            clearInterval(simIntervalId);
+
+            const logDiv = document.getElementById('combatLog');
+            logDiv.innerHTML = `<div style="background: #cf6679; color: #000; padding: 10px; font-weight: bold; text-align: center;">
+                ⚠️ MARKAS HANCUR! ⚠️<br>
+                ${target.type.toUpperCase()} berhasil menembus pertahanan.
+            </div>` + logDiv.innerHTML;
+
+            alert(`GAME OVER! Markas dihancurkan oleh ${target.type}.`);
+
+            // Disable controls
+            document.getElementById('fireButton').disabled = true;
+            document.getElementById('weaponSelect').disabled = true;
+        }
+
+        // --- SENSOR SIMULATION ---
+        function generateSensorData() {
+            const radar = [];
+            const camera = [];
+
+            realTargets.forEach(t => {
+                // Kalkulasi sensor berdasarkan posisi kartesius
+                const distance = Math.sqrt(t.x * t.x + t.z * t.z); // Jarak di bidang XZ
+                const angle = (Math.atan2(t.z, t.x) * 180 / Math.PI + 360) % 360;
+                const altitude = t.y;
+
+                // RADAR: Ada noise dan limit jarak
+                if (distance < RADAR_RANGE) {
+                    // Noise: Jarak +/- 100m, Sudut +/- 2 derajat
+                    const noisyDist = distance + (Math.random() - 0.5) * 200;
+                    const noisyAngle = (angle + (Math.random() - 0.5) * 4 + 360) % 360;
+
+                    radar.push({
+                        distance: noisyDist,
+                        angle: noisyAngle,
+                        trueId: t.id // ID asli (disembunyikan dari operator, dipakai untuk debugging/fusi)
+                    });
+                }
+
+                // KAMERA: Hanya visual range
+                if (distance < VISUAL_RANGE) {
+                    // Noise sudut kamera lebih kecil (+/- 1 derajat)
+                    const noisyAngle = (angle + (Math.random() - 0.5) * 2 + 360) % 360;
+                    camera.push({
+                        label: t.type,
+                        angle: noisyAngle
+                    });
+                }
+            });
+
+            // Clutter / Hantu Radar (False Positive) - Jarang terjadi
+            if (Math.random() > 0.95) {
+                radar.push({
+                    distance: getRandomInt(5000, 20000),
+                    angle: getRandomInt(0, 360),
+                    trueId: "GHOST"
+                });
+            }
+
+            return { camera, radar };
+        }
+
+        function processData(camera, radar) {
+            // Fusi Data: Mencocokkan Radar & Kamera berdasarkan SUDUT (Bearing)
+            let fused = [];
+            let radarUsed = new Set();
+            let cameraUsed = new Set();
+
+            // 1. Loop Radar, cari Kamera yang sudutnya mirip
+            radar.forEach((r, rIdx) => {
+                let bestCamIdx = -1;
+                let minDiff = 10; // Toleransi 10 derajat
+
+                camera.forEach((c, cIdx) => {
+                    if (cameraUsed.has(cIdx)) return;
+
+                    let diff = Math.abs(r.angle - c.angle);
+                    if (diff > 180) diff = 360 - diff; // Handle crossing 0/360
+
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        bestCamIdx = cIdx;
+                    }
+                });
+
+                if (bestCamIdx !== -1) {
+                    // MATCH: Objek teridentifikasi
+                    cameraUsed.add(bestCamIdx);
+                    fused.push({
+                        id: r.trueId, // Internal tracking
+                        classification: camera[bestCamIdx].label,
+                        distance: r.distance,
+                        angle: r.angle,
+                        source: "FUSED"
+                    });
+                } else {
+                    // NO MATCH: Objek tak dikenal (hanya radar)
+                    fused.push({
+                        id: r.trueId,
+                        classification: "unknown",
+                        distance: r.distance,
+                        angle: r.angle,
+                        source: "RADAR"
+                    });
+                }
+            });
+
+            // Hitung Skor Prioritas
+            fused.forEach(obj => {
+                let base = THREAT_SCORES[obj.classification] || 10;
+                let distScore = 0;
+                if (obj.distance < 5000) distScore = 50;
+                else if (obj.distance < 15000) distScore = 20;
+                obj.score = base + distScore;
+            });
+
+            // Urutkan
+            return fused.sort((a, b) => b.score - a.score);
+        }
+
+        // --- VISUALISASI ---
+        function initialize3DScene() {
+            const canvas = document.getElementById('sceneCanvas');
+            // Ambil ukuran visual dari CSS (500px) agar render tajam
+            const width = canvas.clientWidth;
+            const height = canvas.clientHeight;
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, width / height, 1, RADAR_RANGE * 4 * SCENE_SCALE);
+            camera.position.set(0, 150, 350); // Posisi kamera sedikit di atas dan di belakang markas
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(width, height, false);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // Cahaya
+            const ambientLight = new THREE.AmbientLight(0x404040, 2);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Markas (Base)
+            const baseGeo = new THREE.CylinderGeometry(20, 20, 5, 32);
+            const baseMat = new THREE.MeshPhongMaterial({ color: 0x03dac6 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            scene.add(base);
+
+            // Ground Plane / Grid
+            const gridHelper = new THREE.GridHelper(RADAR_RANGE * SCENE_SCALE * 2, 20);
+            scene.add(gridHelper);
+
+            // Lingkaran Jangkauan
+            const radarRingGeo = new THREE.RingGeometry(RADAR_RANGE * SCENE_SCALE - 1, RADAR_RANGE * SCENE_SCALE, 64);
+            const radarRingMat = new THREE.MeshBasicMaterial({ color: 0x03dac6, side: THREE.DoubleSide });
+            const radarRing = new THREE.Mesh(radarRingGeo, radarRingMat);
+            radarRing.rotation.x = -Math.PI / 2;
+            scene.add(radarRing);
+
+            const criticalRingGeo = new THREE.RingGeometry(CRITICAL_RANGE * SCENE_SCALE - 1, CRITICAL_RANGE * SCENE_SCALE, 64);
+            const criticalRingMat = new THREE.MeshBasicMaterial({ color: 0xcf6679, side: THREE.DoubleSide });
+            const criticalRing = new THREE.Mesh(criticalRingGeo, criticalRingMat);
+            criticalRing.rotation.x = -Math.PI / 2;
+            scene.add(criticalRing);
+
+            createSkyDome();
+        }
+
+        function createSkyDome() {
+            // Membuat tekstur langit secara prosedural (tanpa gambar eksternal)
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const context = canvas.getContext('2d');
+
+            // Gradient: Langit gelap di atas, terang di horizon, gelap di bawah
+            const gradient = context.createLinearGradient(0, 0, 0, 512);
+            gradient.addColorStop(0, '#0b1026');   // Zenith (Atas) - Biru Gelap
+            gradient.addColorStop(0.45, '#2b32b2'); // Langit
+            gradient.addColorStop(0.5, '#ff9966');  // Horizon (Sunset)
+            gradient.addColorStop(0.55, '#141e30'); // Tanah (Gelap)
+            gradient.addColorStop(1, '#000000');    // Nadir (Bawah)
+
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, 512, 512);
+
+            // Tambah Bintang
+            for (let i = 0; i < 200; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 230; // Hanya di langit atas
+                const r = Math.random() * 1.2;
+                const opacity = Math.random();
+                context.beginPath();
+                context.arc(x, y, r, 0, 2 * Math.PI);
+                context.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                context.fill();
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const geometry = new THREE.SphereGeometry(RADAR_RANGE * SCENE_SCALE * 3, 32, 32);
+            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+            const skyDome = new THREE.Mesh(geometry, material);
+            scene.add(skyDome);
+        }
+
+        function createTargetMesh(target) {
+            const model = loadedModels[target.type] || loadedModels["unknown"];
+            if (model) {
+                const newMesh = model.clone(); // Selalu clone, jangan gunakan objek asli
+                newMesh.position.set(
+                    target.x * SCENE_SCALE,
+                    target.y * SCENE_SCALE,
+                    target.z * SCENE_SCALE
+                );
+                scene.add(newMesh);
+                targetMeshes[target.id] = newMesh;
+            }
+        }
+
+        function drawTargetsInScene() {
+            // Hapus mesh dari target yang sudah hancur
+            for (const id in targetMeshes) {
+                if (!realTargets.find(t => t.id === id)) {
+                    scene.remove(targetMeshes[id]);
+                    delete targetMeshes[id];
+                }
+            }
+
+            // Update posisi mesh yang masih ada
+            realTargets.forEach(t => {
+                const mesh = targetMeshes[t.id];
+                if (mesh) {
+                    mesh.position.set(t.x * SCENE_SCALE, t.y * SCENE_SCALE, t.z * SCENE_SCALE);
+                    // Buat model menghadap ke markas (0,0,0)
+                    mesh.lookAt(0, 0, 0);
+                }
+            });
+        }
+
+        function updateUI(prioritized) {
+            const tbody = document.querySelector('#targetTable tbody');
+            const fireButton = document.getElementById('fireButton');
+            tbody.innerHTML = '';
+
+            prioritized.forEach(t => {
+                const row = document.createElement('tr');
+                const distStr = t.distance ? (t.distance / 1000).toFixed(1) + ' km' : 'N/A';
+
+                let scoreClass = 'score-low';
+                if (t.score >= 100) scoreClass = 'score-high';
+                else if (t.score >= 50) scoreClass = 'score-med';
+
+                row.innerHTML = `
+                    <td>${t.classification.toUpperCase()}</td>
+                    <td>${distStr}</td>
+                    <td class="${scoreClass}">${t.score}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            const recText = document.getElementById('recText');
+            if (prioritized.length > 0 && !isGameOver) {
+                const top = prioritized[0];
+                recText.innerHTML = `ENGAGE: <b>${top.classification.toUpperCase()}</b> (Skor: ${top.score})`;
+                fireButton.disabled = false;
+            } else {
+                recText.textContent = "Tidak ada ancaman terdeteksi.";
+                fireButton.disabled = true;
+            }
+        }
+
+        function updateAmmoUI() {
+            const container = document.getElementById('ammoDisplay');
+            container.innerHTML = '';
+            for (const [type, count] of Object.entries(currentAmmo)) {
+                const div = document.createElement('div');
+                div.style.background = '#333';
+                div.style.padding = '5px 10px';
+                div.style.borderRadius = '4px';
+                div.style.flex = '1';
+                div.style.textAlign = 'center';
+                div.style.border = count > 0 ? '1px solid #555' : '1px solid #cf6679';
+                div.style.color = count > 0 ? '#e0e0e0' : '#cf6679';
+                div.innerHTML = `<div style="font-size:0.8em; color:#aaa;">${type}</div><div style="font-size:1.2em; font-weight:bold;">${count}</div>`;
+                container.appendChild(div);
+            }
+        }
+
+        // --- KONTROL PENGGUNA ---
+        function setupControls() {
+            const fireButton = document.getElementById('fireButton');
+            const weaponSelect = document.getElementById('weaponSelect');
+            const resetButton = document.getElementById('resetButton');
+
+            resetButton.addEventListener('click', resetSimulation);
+
+            fireButton.addEventListener('click', () => {
+                if (isGameOver) return;
+
+                if (systemTracks.length > 0) {
+                    const targetToEngage = systemTracks[0];
+                    const weapon = weaponSelect.value;
+                    const logDiv = document.getElementById('combatLog');
+
+                    // Cek Amunisi
+                    if (currentAmmo[weapon] <= 0) {
+                        logDiv.innerHTML = `<span style="color:#cf6679;">GAGAL: Amunisi ${weapon} habis!</span><br>` + logDiv.innerHTML;
+                        return;
+                    }
+
+                    // Kurangi Amunisi
+                    currentAmmo[weapon]--;
+                    updateAmmoUI();
+
+                    // Hitung Probabilitas Hit (Pk)
+                    let pk = 0;
+                    const distKm = targetToEngage.distance / 1000;
+
+                    // Logika Senjata Sederhana
+                    if (weapon === "R-77") { // BVR (Long Range)
+                        if (distKm > 10 && distKm < 80) pk = 85;
+                        else pk = 40;
+                    } else if (weapon === "MICA") { // WVR (Short Range)
+                        if (distKm < 15) pk = 90;
+                        else pk = 10;
+                    } else { // AMRAAM
+                        if (distKm > 5 && distKm < 50) pk = 80;
+                        else pk = 50;
+                    }
+
+                    // Roll Dice
+                    const roll = Math.random() * 100;
+                    const hit = roll < pk;
+
+                    let msg = `FOX-3! Menembak ${targetToEngage.classification} @ ${distKm.toFixed(1)}km dengan ${weapon}... `;
+
+                    if (hit) {
+                        msg += `<span style="color:#cf6679; font-weight:bold;">SPLASH! Target Hancur.</span>`;
+                        // Hapus dari Real World
+                        realTargets = realTargets.filter(t => t.id !== targetToEngage.id);
+                    } else {
+                        msg += `<span style="color:#ffb74d;">MISS! Target bermanuver.</span>`;
+                    }
+
+                    logDiv.innerHTML = msg + "<br>" + logDiv.innerHTML;
+
+                    // Force update segera
+                    runSimulationCycle();
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                // Handle window resize if needed in the future
+            });
+        }
+
+        function loadModels() {
+            const promises = Object.entries(modelPaths).map(([type, path]) => {
+                return new Promise((resolve, reject) => {
+                    loader.load(path, (gltf) => {
+                        // Atur skala dasar model saat pertama kali dimuat
+                        if (type === 'airplane') gltf.scene.scale.set(15, 15, 15);
+                        else if (type === 'missile') gltf.scene.scale.set(8, 8, 8);
+                        else if (type === 'helicopter') gltf.scene.scale.set(12, 12, 12);
+                        else gltf.scene.scale.set(5, 5, 5);
+
+                        loadedModels[type] = gltf.scene;
+                        resolve();
+                    }, undefined, (error) => {
+                        console.error(`Gagal memuat model: ${path}`, error);
+                        reject(error);
+                    });
+                });
+            });
+            return Promise.all(promises);
+        }
+
+        function resetSimulation() {
+            // Hentikan loop lama
+            clearInterval(simIntervalId);
+
+            // Reset State
+            isGameOver = false;
+            currentAmmo = { ...INITIAL_AMMO };
+            realTargets = [];
+            systemTracks = [];
+
+            // Reset UI
+            document.getElementById('combatLog').innerHTML = '';
+            document.getElementById('recText').innerHTML = 'Menunggu data sensor...';
+            document.getElementById('fireButton').disabled = false;
+            document.getElementById('weaponSelect').disabled = false;
+
+            // Bersihkan Scene 3D
+            for (const id in targetMeshes) {
+                scene.remove(targetMeshes[id]);
+            }
+            targetMeshes = {};
+
+            camera.position.set(0, 150, 350);
+
+            // Re-init
+            initRealWorld();
+            updateAmmoUI();
+
+            // Mulai Loop Baru
+            simIntervalId = setInterval(runSimulationCycle, SIM_TICK);
+            runSimulationCycle();
+        }
+
+        // --- LOOP UTAMA ---
+        function runSimulationCycle() {
+            if (isGameOver) return;
+            controls.update(); // Untuk damping kamera
+
+            // 1. Update Fisika Dunia Nyata
+            updatePhysics(SIM_TICK / 1000);
+
+            // 2. Sensor Membaca Dunia Nyata
+            const data = generateSensorData();
+
+            // 3. Sistem Memproses Data Sensor
+            systemTracks = processData(data.camera, data.radar);
+
+            drawTargetsInScene();
+            updateUI(systemTracks);
+
+            // Render scene 3D
+            renderer.render(scene, camera);
+        }
+
+        // Jalankan
+        function startSimulation() {
+            initialize3DScene();
+            setupControls();
+            updateAmmoUI();
+
+            document.getElementById('recText').innerHTML = "Memuat model 3D...";
+
+            loadModels().then(() => {
+                console.log("Semua model berhasil dimuat.");
+                initRealWorld(); // Buat target pertama setelah model siap
+                simIntervalId = setInterval(runSimulationCycle, SIM_TICK);
+            }).catch(error => {
+                document.getElementById('recText').innerHTML = `<span style="color: #cf6679;">GAGAL MEMUAT MODEL 3D.<br>Pastikan file ada di folder /models dan Anda menjalankan Live Server.</span>`;
+            });
+        }
+
+        startSimulation();
+
+    </script>
+</body>
+
+</html>

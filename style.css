@@ -1,0 +1,149 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #121212;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 20px;
+}
+
+h1 {
+    color: #03dac6;
+    margin-bottom: 10px;
+}
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+    width: 100%;
+    max-width: 98%;
+}
+
+/* Map Styling */
+#sceneCanvas {
+    flex: 3;
+    min-width: 800px;
+    height: 750px;
+    background-color: #000;
+    border: 2px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(3, 218, 198, 0.2);
+    cursor: grab;
+}
+
+/* Panel Info */
+.panel {
+    flex: 1;
+    min-width: 400px;
+    background: #1e1e1e;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+th,
+td {
+    text-align: left;
+    padding: 10px;
+    border-bottom: 1px solid #333;
+    font-size: 0.9em;
+}
+
+th {
+    color: #bb86fc;
+}
+
+.score-high {
+    color: #cf6679;
+    font-weight: bold;
+}
+
+.score-med {
+    color: #ffb74d;
+}
+
+.score-low {
+    color: #81c784;
+}
+
+.recommendation-box {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(207, 102, 121, 0.1);
+    border: 1px solid #cf6679;
+    border-radius: 4px;
+    color: #cf6679;
+}
+
+/* Weapon Control Panel */
+.weapon-panel {
+    background: #1e1e1e;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    margin-top: 20px;
+    width: 100%;
+}
+
+.weapon-panel select,
+.weapon-panel button {
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background-color: #333;
+    color: #e0e0e0;
+    font-size: 1em;
+    margin-right: 10px;
+}
+
+.weapon-panel button {
+    background-color: #cf6679;
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.weapon-panel button:hover {
+    background-color: #ff799a;
+}
+
+.weapon-panel button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+    color: #888;
+}
+
+.radar-btn {
+    background-color: #03dac6;
+    border: none;
+    cursor: pointer;
+}
+
+#resetButton {
+    background-color: #03dac6;
+}
+
+#resetButton:hover {
+    background-color: #64ffda;
+}
+
+.target-row:hover {
+    background-color: #3a3a3a;
+    cursor: pointer;
+}
+
+.selected-row {
+    background-color: rgba(207, 102, 121, 0.2) !important;
+    border-left: 3px solid #cf6679;
+}

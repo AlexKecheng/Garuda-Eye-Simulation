@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Garuda Eye [3D]</title>
+    <!-- Tautkan file CSS eksternal -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <h1>Garuda Eye: Tactical Simulation</h1>
+
+    <div class="container">
+        <!-- Visualisasi Peta -->
+        <canvas id="sceneCanvas"></canvas>
+
+        <!-- Panel Data -->
+        <div class="panel">
+            <h2 style="margin-top: 0;">Target Prioritas</h2>
+            <table id="targetTable">
+                <thead>
+                    <tr>
+                        <th>Tipe</th>
+                        <th>Jarak</th>
+                        <th>Skor</th>
+                        <th>Status</th>
+                        <th>Keterangan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data akan masuk di sini -->
+                </tbody>
+            </table>
+
+            <div id="recBox" class="recommendation-box">
+                <strong>REKOMENDASI AKSI:</strong><br>
+                <span id="recText">Menunggu data sensor...</span>
+                <div id="combatLog" style="font-size: 0.8em; margin-top: 5px; color: #aaa;"></div>
+            </div>
+
+            <!-- Dashboard Statistik Real-time -->
+            <div
+                style="margin-top: 15px; padding: 10px; background: #2c2c2c; border-radius: 4px; border: 1px solid #444;">
+                <h4 style="margin: 0 0 5px 0; color: #03dac6;">Statistik Misi</h4>
+                <div style="display: flex; justify-content: space-between; font-size: 0.9em;">
+                    <span>Hancur: <b id="statKills">0</b></span>
+                    <span>Akurasi: <b id="statAccuracy">0%</b></span>
+                </div>
+            </div>
+
+            <!-- Pengaturan Gelar Pertahanan -->
+            <div class="panel" style="margin-top: 15px; padding: 15px; background: #2c2c2c;">
+                <h4 style="margin: 0 0 10px 0; color: #03dac6;">Pengaturan Gelar Pertahanan</h4>
+                <label for="defenseRadiusSlider">Radius Gelar: <b id="radiusValue">5.0</b> km</label>
+                <input type="range" id="defenseRadiusSlider" min="2" max="15" value="5" step="0.5"
+                    style="width: 100%; margin-top: 5px;">
+                <button id="applyLayoutButton"
+                    style="width: 100%; padding: 8px; margin-top: 10px; background-color: #03dac6; color: #000; border: none; border-radius: 4px; cursor: pointer;">Terapkan
+                    Gelar Baru</button>
+            </div>
+
+            <!-- Simulasi Kegagalan Sistem -->
+            <div style="margin-top: 15px;">
+                <h4 style="margin: 0 0 5px 0; color: #ffb74d;">Status Radar (Simulasi Fail)</h4>
+                <div style="display: flex; gap: 5px;">
+                    <button id="btnRadar0" class="radar-btn" style="flex:1; padding: 5px;">R-01</button>
+                    <button id="btnRadar1" class="radar-btn" style="flex:1; padding: 5px;">R-02</button>
+                    <button id="btnRadar2" class="radar-btn" style="flex:1; padding: 5px;">R-03</button>
+                </div>
+            </div>
+
+            <!-- Panel Kontrol Senjata -->
+            <div class="weapon-panel">
+                <h3 style="margin-top:0; color: #bb86fc;">Kontrol Senjata</h3>
+                <div id="ammoDisplay" style="display: flex; gap: 10px; margin-bottom: 15px;"></div>
+                <select id="weaponSelect">
+                    <option value="NASAMS">NASAMS (40km)</option>
+                    <option value="VL MICA">VL MICA (20km)</option>
+                    <option value="Starstreak">Starstreak (7km)</option>
+                </select>
+                <button id="fireButton">TEMBAK</button>
+                <button id="swarmButton" style="background-color: #ff9800; color: #000;">⚠️ SWARM</button>
+                <button id="resetButton">RESET</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three.js JS for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera movement -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- GLTFLoader for loading 3D models -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- Tautkan file JavaScript eksternal -->
+    <script src="simulation.js"></script>
+</body>
+
+</html>
