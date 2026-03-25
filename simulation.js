@@ -106,7 +106,7 @@ let radarMeshes = []; // Untuk animasi putaran radar
 let activeSmokeParticles = []; // Untuk jejak asap rudal
 let launcherPositions = []; // Menyimpan posisi 3 launcher pertahanan
 let activeInterceptors = []; // Daftar rudal pertahanan yang sedang terbang
-const loader = new THREE.GLTFLoader();
+let loader; // Inisialisasi nanti di startSimulation
 const loadedModels = {}; // Cache untuk model yang sudah di-load
 const modelPaths = {
     "airplane": "models/airplane.glb",
@@ -1399,6 +1399,14 @@ function setupControls() {
 }
 
 function loadModels() {
+    // Cek apakah THREE.GLTFLoader tersedia
+    if (typeof THREE.GLTFLoader === 'undefined') {
+        console.error("GLTFLoader tidak ditemukan. Pastikan script CDN dimuat dengan benar.");
+        return Promise.resolve(); // Lanjut dengan fallback geometri dasar
+    }
+
+    loader = new THREE.GLTFLoader();
+
     const promises = Object.entries(modelPaths).map(([type, path]) => {
         return new Promise((resolve, reject) => {
             loader.load(path, (gltf) => {
@@ -1580,11 +1588,11 @@ function startSimulation() {
     setupControls();
     updateAmmoUI();
 
-    document.getElementById('recText').innerHTML = "SISTEM PERTAHANAN UDARA: MEMUAT DATA...";
+    document.getElementById('recText').innerHTML = "MENGINISIALISASI SISTEM...";
     document.getElementById('recText').style.color = "#03dac6"; // Cyan agar terlihat aktif
 
     loadModels().then(() => {
-        console.log("Semua model berhasil dimuat.");
+        console.log("Sistem Siap. Menggunakan model 3D atau fallback geometri.");
         // Hanya spawn target lokal jika TIDAK menggunakan server
         if (!USE_PYTHON_SERVER) {
             initRealWorld();
