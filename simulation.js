@@ -475,7 +475,7 @@ function initialize3DScene() {
 
     scene = new THREE.Scene();
     // Perluas jarak pandang kamera (Far Plane) untuk melihat target jauh (150km+)
-    camera = new THREE.PerspectiveCamera(75, width / height, 1, 200000 * SCENE_SCALE);
+    camera = new THREE.PerspectiveCamera(75, width / height, 1, 1000000 * SCENE_SCALE); // Diperluas 5x agar langit tidak flickering
     camera.position.set(0, 200, 450); // Posisi kamera sedikit lebih tinggi untuk overview taktis
 
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -791,7 +791,7 @@ function createTargetMesh(target) {
                 break;
             default: // drone & unknown
                 geometry = new THREE.SphereGeometry(5, 16, 16);
-                color = 0xffffff; // Putih
+                color = 0xaaaaaa; // Abu-abu (agar tidak silau jika model gagal load)
                 break;
         }
         const material = new THREE.MeshPhongMaterial({ color: color });
