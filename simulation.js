@@ -266,11 +266,15 @@ function triggerGameOver(target) {
                 ${target.type.toUpperCase()} berhasil menembus pertahanan.
             </div>` + logDiv.innerHTML;
 
-    alert(`GAME OVER! Markas dihancurkan oleh ${target.type}.`);
-
     // Disable controls
     document.getElementById('fireButton').disabled = true;
     document.getElementById('weaponSelect').disabled = true;
+
+    // Tampilkan Modal Keren
+    const modal = document.getElementById('gameOverModal');
+    const reason = document.getElementById('gameOverReason');
+    reason.innerHTML = `SISTEM PERTAHANAN JEBOL.<br>Markas dihancurkan oleh unit <b>${target.type.toUpperCase()}</b> pada jarak dekat.`;
+    modal.style.display = 'flex';
 }
 
 // --- SENSOR SIMULATION ---
@@ -1159,6 +1163,9 @@ function resetSimulation() {
     realTargets = [];
     systemTracks = [];
 
+    // Sembunyikan Modal Game Over
+    document.getElementById('gameOverModal').style.display = 'none';
+
     // Reset UI
     document.getElementById('combatLog').innerHTML = '';
     document.getElementById('recText').innerHTML = 'Menunggu data sensor...';
@@ -1309,6 +1316,9 @@ function startSimulation() {
         }
         simIntervalId = setInterval(runSimulationCycle, SIM_TICK);
         animate(); // Mulai loop rendering visual
+
+        // Pastikan modal tertutup saat start awal
+        document.getElementById('gameOverModal').style.display = 'none';
     }).catch(error => {
         document.getElementById('recText').innerHTML = `<span style="color: #cf6679;">GAGAL MEMUAT MODEL 3D.<br>Pastikan folder 'models' beserta isinya telah diunggah ke repository.</span>`;
     });
