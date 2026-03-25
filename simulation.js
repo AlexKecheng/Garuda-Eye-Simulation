@@ -58,26 +58,40 @@ const SIM_TICK = 1000; // Update setiap 1 detik
 // --- ASPEK TEKNIS ALUTSISTA ---
 const MIN_ELEVATION_ANGLE = 1.5; // Blind spot radar di bawah 1.5 derajat (Clutter/Horizon)
 const MOUNTAIN_CONFIG = { x: 25000, z: 10000, radius: 6000, height: 5000 }; // Rintangan Medan
-const WEAPON_SPECS = { // Parameter disesuaikan dengan spesifikasi asli
-    "NASAMS": { maxRange: 40000, pk: 80, maxAmmo: 6, reloadTime: 10000 },  // Area Defense (AMRAAM)
-    "VL MICA": { maxRange: 20000, pk: 85, maxAmmo: 8, reloadTime: 5000 },   // Point Defense
-    "Starstreak": { maxRange: 7000, pk: 95, maxAmmo: 12, reloadTime: 3000 }  // VSHORAD
+const WEAPON_SPECS = {
+    "NASAMS": { maxRange: 40000, pk: 80, maxAmmo: 6, reloadTime: 10000, cost: 2000 },  // Rp 2 Miliar
+    "VL MICA": { maxRange: 20000, pk: 85, maxAmmo: 8, reloadTime: 5000, cost: 1500 },   // Rp 1.5 Miliar
+    "Starstreak": { maxRange: 7000, pk: 95, maxAmmo: 12, reloadTime: 3000, cost: 500 }, // Rp 500 Juta
+    "Oerlikon": { maxRange: 4000, pk: 70, maxAmmo: 100, reloadTime: 2000, cost: 5 }     // Rp 5 Juta
 };
 
 // --- STATE SIMULASI ---
 let systemTracks = []; // Apa yang dilihat oleh sistem (hasil fusi)
 let realTargets = [];  // Ground Truth (Posisi asli objek di dunia nyata)
 const mapCenter = [-7.25, 110.4]; // Konseptual, tidak lagi dipakai untuk render
-let currentAmmo = { "NASAMS": 6, "VL MICA": 8, "Starstreak": 12 };
-let reloadingStatus = { "NASAMS": false, "VL MICA": false, "Starstreak": false };
+let currentAmmo = { "NASAMS": 6, "VL MICA": 8, "Starstreak": 12, "Oerlikon": 100 };
+let reloadingStatus = { "NASAMS": false, "VL MICA": false, "Starstreak": false, "Oerlikon": false };
 let radarActive = [true, true, true]; // Status aktif/mati 3 radar
 let selectedTargetId = null; // ID target yang dipilih manual
-let missionStats = { kills: 0, shots: 0 };
+let missionStats = { kills: 0, shots: 0, costSaved: 0, leaked: 0 };
+let engagementHistory = []; // Untuk menyimpan data debat/AAR
 let radarRings = []; // Referensi ke mesh cincin radar untuk toggle visibilitas
 let weaponZoneMeshes = []; // Referensi ke mesh IZ/LRZ
 let defenseSiteMeshes = []; // Menyimpan semua objek 3D dari site pertahanan
 let isGameOver = false;
 let simIntervalId;
+
+// --- KONFIGURASI MCDM ---
+const WEIGHTS = {
+    DIST: 0.4,
+    SPEED: 0.3,
+    ANGLE: 0.2,
+    RCS: 0.1
+};
+const MAX_SPEED_REF = 1000; // m/s
+const RCS_MAP = { "missile": 10, "airplane": 5, "helicopter": 3, "drone": 1, "unknown": 2 };
+let currentWeather = "Clear";
+const WEATHER_MODIFIERS = { "Clear": 1.0, "Rain": 0.75, "Storm": 0.6 };
 
 // --- INTEGRASI SERVER ---
 const USE_PYTHON_SERVER = false; // Set ke true untuk mengambil data dari Python
@@ -91,6 +105,7 @@ let activeExplosions = []; // Untuk melacak partikel ledakan
 let radarMeshes = []; // Untuk animasi putaran radar
 let activeSmokeParticles = []; // Untuk jejak asap rudal
 let launcherPositions = []; // Menyimpan posisi 3 launcher pertahanan
+let activeInterceptors = []; // Daftar rudal pertahanan yang sedang terbang
 const loader = new THREE.GLTFLoader();
 const loadedModels = {}; // Cache untuk model yang sudah di-load
 const modelPaths = {
@@ -258,7 +273,24 @@ function updatePhysics(dtSeconds) {
 
 function triggerGameOver(target) {
     isGameOver = true;
+    missionStats.leaked++;
     clearInterval(simIntervalId);
+
+    // Catat Kerugian Finansial Akibat Kebocoran ke History AAR
+    engagementHistory.push({
+        time: new Date().toLocaleTimeString(),
+        type: `LEAKAGE: ${target.type.toUpperCase()}`,
+        distance: 0,
+        closingSpeed: 0,
+        totalScore: 0,
+        justification: "KERUSAKAN OBVIT (IKN) - PERTAHANAN JEBOL",
+        targetId: target.id,
+        status: 'CRITICAL',
+        isOverkill: false,
+        weaponCost: 50000, // Estimasi kerugian aset Rp 50 Miliar (Auditable)
+        result: 'LEAKED',
+        pk: '0%'
+    });
 
     const logDiv = document.getElementById('combatLog');
     logDiv.innerHTML = `<div style="background: #cf6679; color: #000; padding: 10px; font-weight: bold; text-align: center;">
@@ -270,11 +302,13 @@ function triggerGameOver(target) {
     document.getElementById('fireButton').disabled = true;
     document.getElementById('weaponSelect').disabled = true;
 
-    // Tampilkan Modal Keren
+    // Tampilkan Modal Game Over
     const modal = document.getElementById('gameOverModal');
-    const reason = document.getElementById('gameOverReason');
-    reason.innerHTML = `SISTEM PERTAHANAN JEBOL.<br>Markas dihancurkan oleh unit <b>${target.type.toUpperCase()}</b> pada jarak dekat.`;
-    modal.style.display = 'flex';
+    if (modal) {
+        const reason = document.getElementById('gameOverReason');
+        reason.innerHTML = `SISTEM PERTAHANAN JEBOL.<br>Markas dihancurkan oleh unit <b>${target.type.toUpperCase()}</b> pada jarak dekat.`;
+        modal.style.display = 'flex';
+    }
 }
 
 // --- SENSOR SIMULATION ---
@@ -441,33 +475,191 @@ function processData(camera, radar) {
 
     // Hitung Skor Prioritas (ALGORITMA BARU)
     fused.forEach(obj => {
-        // 1. Base Threat (Berdasarkan Tipe)
-        let score = THREAT_SCORES[obj.classification] || 10;
+        // Normalisasi 0.0 - 1.0
+        const s_dist = (RADAR_RANGE - Math.min(obj.distance, RADAR_RANGE)) / RADAR_RANGE;
+        const s_speed = Math.max(0, Math.min(obj.closingSpeed || 0, MAX_SPEED_REF)) / MAX_SPEED_REF;
 
-        // 2. Proximity Threat (Ancaman Terdekat ke Obvit/Pusat)
-        // Prioritas utama: Seberapa dekat dengan IKN (0,0,0)
-        // Jarak < 20km mulai panik.
-        const proximityScore = Math.max(0, (1 - (obj.distance / 30000)) * 80);
-        score += proximityScore;
+        // Simulasi Aspect Angle: Semakin kecil angle, semakin mengarah ke pusat (cos(0)=1)
+        // Di simulasi ini, kita anggap target yang closing speednya tinggi punya angle menuju pusat yang kecil
+        const s_angle = Math.max(0, (obj.closingSpeed || 0) > 0 ? 0.8 : 0.2);
+        const s_rcs = (RCS_MAP[obj.classification] || 2) / 10;
 
-        // 3. Kinetic Threat (Berdasarkan Kecepatan Mendekat)
-        // Jika mendekat cepat (> 300 m/s atau Mach 0.9), tambah skor signifikan.
-        if (obj.closingSpeed && obj.closingSpeed > 0) {
-            const kineticScore = Math.min(40, (obj.closingSpeed / 300) * 30);
-            score += kineticScore;
+        // Hitung Skor Akhir
+        const total = (s_dist * WEIGHTS.DIST) +
+            (s_speed * WEIGHTS.SPEED) +
+            (s_angle * WEIGHTS.ANGLE) +
+            (s_rcs * WEIGHTS.RCS);
+
+        obj.score = Math.round(total * 100);
+        if (obj.distance < CRITICAL_RANGE) obj.score += 100; // Hard override for critical
+
+        // --- LOGIKA ALOKASI SENJATA (ECONOMY OF WAR) ---
+        const GUN_RANGE_MAX = 5000;
+        const MISSILE_RANGE_MAX = 25000;
+        const rcs = RCS_MAP[obj.classification] || 2;
+        const speed = obj.closingSpeed || 0;
+
+        if (obj.distance > MISSILE_RANGE_MAX) {
+            obj.weaponRec = "PANTAU (OUT OF RANGE)";
+        } else if (obj.score > 80 && obj.distance > GUN_RANGE_MAX) {
+            obj.weaponRec = "RUDAL (PRIORITAS ANCAMAN)";
+        } else if (speed > 800) {
+            obj.weaponRec = "RUDAL (PRIORITAS SPEED)";
+        } else if (rcs < 3 && obj.distance <= GUN_RANGE_MAX) {
+            obj.weaponRec = "MERIAM (EFISIENSI BIAYA)";
+        } else if (obj.distance <= GUN_RANGE_MAX) {
+            obj.weaponRec = "MERIAM (OPTIMAL)";
         } else {
-            // Jika target menjauh, kurangi prioritas karena ancaman berkurang
-            score -= 20;
+            obj.weaponRec = "RUDAL (OPTIMAL)";
         }
-
-        // 4. Critical Zone (Bahaya Fatal)
-        if (obj.distance < CRITICAL_RANGE) score += 100;
-
-        obj.score = Math.round(score);
     });
 
     // Urutkan
     return fused.sort((a, b) => b.score - a.score);
+}
+
+// --- SISTEM INTERCEPTOR (RUDAL PENGEJAR) ---
+function launchInterceptor(startPos, targetId, weaponType) {
+    // startPos adalah Vector3 (Skala Scene) dari Launcher
+    // Konversi ke koordinat Real World untuk logika pengejaran
+    const realStartPos = {
+        x: startPos.x / SCENE_SCALE,
+        y: startPos.y / SCENE_SCALE,
+        z: startPos.z / SCENE_SCALE
+    };
+
+    // Visualisasi Rudal (Cone Sederhana)
+    const geometry = new THREE.ConeGeometry(2, 8, 8);
+    geometry.rotateX(Math.PI / 2); // Putar agar moncong ke depan
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Cyan
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(startPos);
+    scene.add(mesh);
+
+    // Kecepatan Rudal (m/s) - Dipercepat 3x agar gameplay tidak terlalu lama menunggu
+    let speed = 2000; // Default supersonic
+    if (weaponType === 'Starstreak') speed = 3000; // Sangat cepat (Mach 4+)
+    else if (weaponType === 'NASAMS') speed = 1500; // Medium
+
+    activeInterceptors.push({
+        mesh: mesh,
+        pos: realStartPos,
+        targetId: targetId,
+        weapon: weaponType,
+        speed: speed
+    });
+}
+
+function updateInterceptors(dt) {
+    for (let i = activeInterceptors.length - 1; i >= 0; i--) {
+        const interceptor = activeInterceptors[i];
+        const target = realTargets.find(t => t.id === interceptor.targetId);
+
+        // Jika target hilang/hancur sebelum rudal sampai
+        if (!target) {
+            scene.remove(interceptor.mesh);
+            activeInterceptors.splice(i, 1);
+            continue;
+        }
+
+        // Hitung vektor arah ke target
+        const dx = target.x - interceptor.pos.x;
+        const dy = target.y - interceptor.pos.y;
+        const dz = target.z - interceptor.pos.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        // Jarak tempuh frame ini (Speed * DeltaTime * GameplayMultiplier)
+        const moveDist = interceptor.speed * dt * 3.0;
+
+        // Cek Tumbukan (Impact)
+        if (dist <= moveDist || dist < 100) {
+            scene.remove(interceptor.mesh);
+            activeInterceptors.splice(i, 1);
+            resolveInterceptorImpact(interceptor, target);
+        } else {
+            // Gerakkan rudal mendekat
+            const dir = { x: dx / dist, y: dy / dist, z: dz / dist };
+            interceptor.pos.x += dir.x * moveDist;
+            interceptor.pos.y += dir.y * moveDist;
+            interceptor.pos.z += dir.z * moveDist;
+
+            // Update visual mesh
+            interceptor.mesh.position.set(
+                interceptor.pos.x * SCENE_SCALE,
+                interceptor.pos.y * SCENE_SCALE,
+                interceptor.pos.z * SCENE_SCALE
+            );
+            interceptor.mesh.lookAt(
+                target.x * SCENE_SCALE,
+                target.y * SCENE_SCALE,
+                target.z * SCENE_SCALE
+            );
+
+            // Efek asap di belakang rudal
+            if (Math.random() > 0.5) spawnSmokeParticle(interceptor.mesh.position);
+        }
+    }
+}
+
+function resolveInterceptorImpact(interceptor, target) {
+    const weapon = interceptor.weapon;
+    // Hitung jarak dari markas (pusat 0,0,0) untuk validasi range
+    const distFromBase = Math.sqrt(target.x * target.x + target.z * target.z);
+    const specs = WEAPON_SPECS[weapon];
+
+    // --- RUMUS REALISTIS Pk (Probability of Kill) ---
+    const pBase = specs.pk / 100;
+    const distFactor = Math.max(0.1, 1 - (distFromBase / specs.maxRange));
+    const weatherMod = WEATHER_MODIFIERS[currentWeather] || 1.0;
+    const ecmMod = target.type === 'missile' ? 0.8 : 1.0;
+
+    const pkTotal = pBase * distFactor * weatherMod * ecmMod;
+    const pkPercent = Math.max(5, Math.min(95, pkTotal * 100));
+
+    const roll = Math.random() * 100;
+    const hit = roll < pkPercent;
+
+    const logDiv = document.getElementById('combatLog');
+    let msg = `IMPACT: ${weapon} vs ${target.type.toUpperCase()}... `;
+
+    if (hit) {
+        msg += `<span style="color:#cf6679; font-weight:bold;">HANCUR! (Splash)</span>`;
+        missionStats.kills++;
+
+        // Update status di AAR history
+        const lastLog = [...engagementHistory].reverse().find(l => l.targetId === target.id && l.status === 'IN FLIGHT');
+        if (lastLog) {
+            lastLog.status = 'SUCCESS';
+            lastLog.pk = pkPercent.toFixed(1) + '%';
+            lastLog.result = 'HIT';
+        }
+
+        // --- HITUNG PENGHEMATAN (ECONOMY OF WAR) ---
+        // Jika menggunakan Meriam untuk target yang disarankan Meriam, 
+        // kita hitung selisihnya dengan rudal termurah (Starstreak)
+        if (weapon === 'Oerlikon') {
+            const potentialWaste = WEAPON_SPECS["Starstreak"].cost;
+            missionStats.costSaved += (potentialWaste - WEAPON_SPECS["Oerlikon"].cost);
+        }
+
+        // Visual Ledakan
+        createExplosion(target.x, target.y, target.z);
+
+        // Hapus target dari dunia nyata
+        realTargets = realTargets.filter(t => t.id !== target.id);
+    } else {
+        msg += `<span style="color:#ffb74d;">GAGAL (Meleset/Jamming).</span>`;
+        const lastLog = [...engagementHistory].reverse().find(l => l.targetId === target.id && l.status === 'IN FLIGHT');
+        if (lastLog) {
+            lastLog.status = 'FAILED';
+            lastLog.pk = pkPercent.toFixed(1) + '%';
+            lastLog.result = 'MISS';
+        }
+    }
+
+    logDiv.innerHTML = msg + "<br>" + logDiv.innerHTML;
+    updateStatsUI();
+    runSimulationCycle(); // Force update UI segera
 }
 
 // --- VISUALISASI ---
@@ -718,21 +910,6 @@ function updateExplosions(dt) {
     }
 }
 
-function visualizeInterceptor(start, end) {
-    // Membuat garis jejak rudal instan (seperti laser/asap cepat)
-    const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
-    const line = new THREE.Line(geometry, material);
-    scene.add(line);
-
-    // Hapus garis setelah 200ms (efek kilatan)
-    setTimeout(() => {
-        scene.remove(line);
-        geometry.dispose();
-        material.dispose();
-    }, 200);
-}
-
 function spawnSmokeParticle(position) {
     const smokeMaterial = new THREE.MeshBasicMaterial({
         color: 0xcccccc,
@@ -904,7 +1081,7 @@ function updateUI(prioritized) {
                     <td>${distStr}</td>
                     <td class="${scoreClass}">${t.score}</td>
                     <td style="color: ${statusColor}; font-weight: bold;">${statusIndicator}</td>
-                    <td style="color: ${keteranganColor}; font-weight: bold;">${keteranganText}</td>
+                    <td style="color: #bb86fc; font-size: 0.85em;"><b>${t.weaponRec}</b></td>
                 `;
         tbody.appendChild(row);
     });
@@ -917,8 +1094,8 @@ function updateUI(prioritized) {
         fireButton.disabled = false;
     } else if (prioritized.length > 0 && !isGameOver) {
         const top = prioritized[0];
-        recText.innerHTML = `Pilih target dari daftar. Rekomendasi: <b>${top.classification.toUpperCase()}</b>`;
-        fireButton.disabled = true;
+        recText.innerHTML = `ANCMAN TERDETEKSI. Siap tembak: <b>${top.classification.toUpperCase()}</b>`;
+        fireButton.disabled = false;
     } else {
         recText.textContent = "Tidak ada ancaman terdeteksi.";
         fireButton.disabled = true;
@@ -954,6 +1131,7 @@ function updateStatsUI() {
     document.getElementById('statKills').innerText = missionStats.kills;
     const acc = missionStats.shots > 0 ? ((missionStats.kills / missionStats.shots) * 100).toFixed(1) : 0;
     document.getElementById('statAccuracy').innerText = acc + "%";
+    document.getElementById('statSavings').innerText = `Rp ${missionStats.costSaved}jt`;
 }
 
 // --- KONTROL PENGGUNA ---
@@ -961,6 +1139,103 @@ function setupControls() {
     const fireButton = document.getElementById('fireButton');
     const weaponSelect = document.getElementById('weaponSelect');
     const resetButton = document.getElementById('resetButton');
+    const reportButton = document.getElementById('reportButton');
+
+    // Event listener untuk cuaca
+    document.getElementById('weatherSelect').addEventListener('change', (e) => {
+        currentWeather = e.target.value;
+    });
+
+    reportButton.addEventListener('click', () => {
+        const modal = document.getElementById('aarModal');
+        const tbody = document.getElementById('aarBody');
+        tbody.innerHTML = '';
+
+        let hits = 0;
+        let overkillCount = 0;
+        let totalExpenditure = 0;
+
+        engagementHistory.forEach(log => {
+            if (log.result === 'HIT') hits++;
+            if (log.isOverkill) overkillCount++;
+            totalExpenditure += (log.weaponCost || 0);
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${log.time}</td>
+                <td><b>${log.type}</b></td>
+                <td>${(log.distance / 1000).toFixed(2)}</td>
+                <td>${log.closingSpeed.toFixed(1)}</td>
+                <td style="color:#03dac6">${log.pk || '-'}</td>
+                <td style="font-weight:bold; color:${log.result === 'HIT' ? '#81c784' : '#cf6679'}">${log.result || 'MISS'}</td>
+                <td style="font-size:0.75em; color:#aaa;">${log.justification}</td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Tambahkan Kesimpulan Taktis (Summary Evaluation)
+        const modalContent = document.querySelector('#aarModal > div');
+        let summaryDiv = document.getElementById('aarSummary');
+        if (!summaryDiv) {
+            summaryDiv = document.createElement('div');
+            summaryDiv.id = 'aarSummary';
+            summaryDiv.style.marginTop = '20px';
+            summaryDiv.style.paddingTop = '15px';
+            summaryDiv.style.borderTop = '1px solid #444';
+            modalContent.appendChild(summaryDiv);
+        }
+
+        const accuracy = engagementHistory.length > 0 ? (hits / engagementHistory.length * 100).toFixed(1) : 0;
+        let evaluation = overkillCount > 2 ?
+            `<span style="color:#cf6679;">⚠️ KRITIK: Penggunaan amunisi boros (Overkill detected).</span>` :
+            `<span style="color:#81c784;">✅ PUJIAN: Disiplin amunisi sangat baik.</span>`;
+        if (missionStats.leaked > 0) evaluation = `<span style="color:#cf6679;">❌ FATAL: Pertahanan bocor, objek vital hancur!</span>`;
+
+        summaryDiv.innerHTML = `
+            <h3 style="color:#bb86fc;">Evaluasi Taktis (Rapor Danton)</h3>
+            <p>Akurasi: ${accuracy}% | Overkill: ${overkillCount} | Bocor: ${missionStats.leaked} | Total Pengeluaran & Kerugian: Rp ${totalExpenditure}jt</p>
+            <p>Kesimpulan: ${evaluation}</p>
+        `;
+
+        if (engagementHistory.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">Belum ada data penembakan.</td></tr>';
+            summaryDiv.innerHTML = '';
+        }
+        modal.style.display = 'flex';
+    });
+
+    // Fitur Ekspor Data ke CSV untuk Lampiran Tesis
+    document.getElementById('downloadCsvButton').addEventListener('click', () => {
+        if (engagementHistory.length === 0) {
+            alert("Belum ada data penembakan untuk diekspor.");
+            return;
+        }
+
+        // Header Kolom CSV
+        const headers = ["Waktu", "Sasaran", "Jarak (km)", "V_Radial (m/s)", "Pk (%)", "Hasil", "Overkill", "Biaya (Rp Juta)", "Justifikasi Algoritma"];
+
+        // Map data engagementHistory ke baris CSV
+        const rows = engagementHistory.map(log => [
+            log.time,
+            log.type,
+            (log.distance / 1000).toFixed(2),
+            log.closingSpeed.toFixed(1),
+            log.pk ? log.pk.replace('%', '') : "0",
+            log.result || "MISS",
+            log.isOverkill ? "YA" : "TIDAK",
+            log.weaponCost || 0,
+            `"${log.justification.replace(/"/g, '""')}"` // Escape double quotes untuk CSV
+        ]);
+
+        const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `AAR_GarudaEye_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.csv`);
+        link.click();
+        URL.revokeObjectURL(url);
+    });
 
     resetButton.addEventListener('click', resetSimulation);
 
@@ -1010,9 +1285,15 @@ function setupControls() {
     weaponSelect.addEventListener('change', updateWeaponZones);
 
     fireButton.addEventListener('click', () => {
-        if (isGameOver || !selectedTargetId) return;
+        if (isGameOver) return;
 
-        const targetToEngage = systemTracks.find(t => t.id === selectedTargetId);
+        // Cari target: Gunakan yang dipilih manual ATAU otomatis ambil prioritas tertinggi
+        let targetToEngage = systemTracks.find(t => t.id === selectedTargetId);
+
+        // Jika tidak ada target terpilih manual, ambil yang paling atas (paling berbahaya)
+        if (!targetToEngage && systemTracks.length > 0) {
+            targetToEngage = systemTracks[0];
+        }
 
         if (targetToEngage) {
 
@@ -1046,6 +1327,30 @@ function setupControls() {
             updateAmmoUI();
             missionStats.shots++;
 
+            // --- SIMPAN DATA UNTUK BAHAN DEBAT (AAR) ---
+            const rcsVal = RCS_MAP[targetToEngage.classification] || 2;
+            const s_dist = ((RADAR_RANGE - targetToEngage.distance) / RADAR_RANGE).toFixed(2);
+            const s_speed = (Math.max(0, targetToEngage.closingSpeed || 0) / MAX_SPEED_REF).toFixed(2);
+
+            let justification = `Dist(${s_dist}*${WEIGHTS.DIST}) + Speed(${s_speed}*${WEIGHTS.SPEED}) + RCS(${rcsVal}/10*${WEIGHTS.RCS})`;
+            if (targetToEngage.distance < CRITICAL_RANGE) justification += ` + CRITICAL_BOOST(100)`;
+
+            // Cek Overkill: Rekomendasi MERIAM tapi Danton pakai Rudal (selain Oerlikon)
+            const isOverkill = targetToEngage.weaponRec.includes("MERIAM") && weapon !== "Oerlikon";
+
+            engagementHistory.push({
+                time: new Date().toLocaleTimeString(),
+                type: targetToEngage.classification.toUpperCase(),
+                distance: targetToEngage.distance,
+                closingSpeed: targetToEngage.closingSpeed || 0,
+                totalScore: targetToEngage.score,
+                justification: justification,
+                targetId: targetToEngage.id,
+                status: 'IN FLIGHT',
+                isOverkill: isOverkill,
+                weaponCost: WEAPON_SPECS[weapon].cost
+            });
+
             // --- LOGIKA PELUNCURAN DARI LAUNCHER TERDEKAT ---
             const realTarget = realTargets.find(t => t.id === targetToEngage.id);
             if (realTarget) {
@@ -1070,50 +1375,16 @@ function setupControls() {
                 if (nearestLauncher) {
                     // Visualisasi: Asap di launcher & Jejak ke target
                     spawnSmokeParticle(nearestLauncher);
-                    visualizeInterceptor(nearestLauncher, targetPos);
+
+                    // Luncurkan Interceptor Fisik
+                    launchInterceptor(nearestLauncher, targetToEngage.id, weapon);
+
+                    // Log Peluncuran
+                    const distKm = (targetToEngage.distance / 1000).toFixed(1);
+                    logDiv.innerHTML = `<span style="color:#03dac6;">FOX-3!</span> Meluncurkan ${weapon} ke ${targetToEngage.classification} (${distKm}km)...<br>` + logDiv.innerHTML;
                 }
             }
 
-            // Hitung Probabilitas Hit (Pk)
-            let pk = 0;
-            const distKm = targetToEngage.distance / 1000;
-            const specs = WEAPON_SPECS[weapon];
-
-            // Logika Pk Variabel (Berdasarkan Jarak Efektif)
-            // Jika di luar jangkauan max, Pk drop drastis
-            if (targetToEngage.distance > specs.maxRange) pk = 10;
-            // Jika terlalu dekat (min range), Pk juga turun
-            else if (targetToEngage.distance < 1000) pk = 30;
-            // Ideal
-            else pk = specs.pk;
-
-            // Roll Dice
-            const roll = Math.random() * 100;
-            const hit = roll < pk;
-
-            let msg = `FOX-3! Menembak ${targetToEngage.classification} @ ${distKm.toFixed(1)}km dengan ${weapon}... `;
-
-            if (hit) {
-                msg += `<span style="color:#cf6679; font-weight:bold;">SPLASH! Target Hancur.</span>`;
-                missionStats.kills++;
-
-                // Cari target asli untuk mendapatkan posisi ledakan
-                const destroyedTarget = realTargets.find(t => t.id === targetToEngage.id);
-                if (destroyedTarget) {
-                    createExplosion(destroyedTarget.x, destroyedTarget.y, destroyedTarget.z);
-                }
-
-                // Hapus dari Real World
-                realTargets = realTargets.filter(t => t.id !== targetToEngage.id);
-            } else {
-                msg += `<span style="color:#ffb74d;">MISS! Target bermanuver.</span>`;
-            }
-
-            logDiv.innerHTML = msg + "<br>" + logDiv.innerHTML;
-            updateStatsUI();
-
-            // Force update segera
-            runSimulationCycle();
         }
     });
 
@@ -1155,11 +1426,11 @@ function resetSimulation() {
 
     // Reset State
     isGameOver = false;
-    currentAmmo = { "NASAMS": 6, "VL MICA": 8, "Starstreak": 12 };
-    reloadingStatus = { "NASAMS": false, "VL MICA": false, "Starstreak": false };
+    currentAmmo = { "NASAMS": 6, "VL MICA": 8, "Starstreak": 12, "Oerlikon": 100 };
+    reloadingStatus = { "NASAMS": false, "VL MICA": false, "Starstreak": false, "Oerlikon": false };
     selectedTargetId = null;
     radarActive = [true, true, true];
-    missionStats = { kills: 0, shots: 0 };
+    missionStats = { kills: 0, shots: 0, costSaved: 0 };
     realTargets = [];
     systemTracks = [];
 
@@ -1189,6 +1460,9 @@ function resetSimulation() {
     [...activeExplosions, ...activeSmokeParticles].forEach(groupOrParticle => {
         scene.remove(groupOrParticle);
     });
+    // Bersihkan interceptor
+    activeInterceptors.forEach(i => scene.remove(i.mesh));
+    activeInterceptors = [];
 
     // Reset dan gambar ulang layout pertahanan ke nilai default
     DEFENSE_RADIUS = 5000;
@@ -1240,6 +1514,7 @@ function animate() {
     const delta = clock.getDelta();
 
     controls.update(); // Update kontrol kamera setiap frame (60 FPS)
+    updateInterceptors(delta); // Update pergerakan rudal pertahanan
 
     // Animasikan visual (Radar, Ledakan, Asap) dengan halus
     const rotationSpeed = 1.0 * delta;
