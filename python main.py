@@ -2,16 +2,16 @@ import random
 import math
 from typing import List, Dict
 
-class SensorSimulator:
-    def __init__(self):
-        # daftar tipe objek yang bisa “dikecam”
-        self.objects = ["drone", "helicopter", "airplane", "missile"]
-
 WEATHER_MODIFIERS = {
     "Clear": 1.0,
     "Rain": 0.75,
     "Storm": 0.6
 }
+
+class SensorSimulator:
+    def __init__(self):
+        # daftar tipe objek yang bisa “dikecam”
+        self.objects = ["drone", "helicopter", "airplane", "missile"]
 
     def get_camera_data(self) -> List[Dict]:
         """
