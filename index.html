@@ -221,15 +221,52 @@
             border-top: 2px solid #cf6679;
             pointer-events: auto;
         }
-    </style>
 
-    <!-- Load Three.js Libraries from CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #111;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #03dac6;
+            font-family: Arial, sans-serif;
+        }
+
+        .loader-spin {
+            border: 5px solid #333;
+            border-top: 5px solid #03dac6;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
 </head>
 
 <body>
+    <!-- Loading Screen -->
+    <div id="loading-overlay">
+        <div class="loader-spin"></div>
+        <p>MENGINISIALISASI GARUDA EYE...</p>
+    </div>
 
     <!-- 3D Scene Container -->
     <canvas id="sceneCanvas"></canvas>
@@ -242,6 +279,7 @@
             <div class="stats-panel">
                 <span>KILLS: <span id="statKills" style="color:#03dac6">0</span></span>
                 <span>ACCURACY: <span id="statAccuracy" style="color:#ffeb3b">0%</span></span>
+                <span>SAVINGS: <span id="statSavings" style="color:#81c784">Rp 0jt</span></span>
             </div>
         </div>
 
@@ -264,6 +302,15 @@
                 </div>
 
                 <div style="margin-top: 15px;"></div>
+                <h2>Kondisi Lingkungan</h2>
+                <select id="weatherSelect"
+                    style="width: 100%; background: #222; color: #fff; border: 1px solid #555; padding: 5px;">
+                    <option value="Clear">Cerah (Pk 100%)</option>
+                    <option value="Rain">Hujan (Pk 75%)</option>
+                    <option value="Storm">Badai (Pk 60%)</option>
+                </select>
+
+                <div style="margin-top: 15px;"></div>
                 <h2>Senjata</h2>
                 <select id="weaponSelect">
                     <option value="NASAMS">NASAMS (40km - Med)</option>
@@ -275,6 +322,7 @@
 
                 <div style="margin-top: 20px;"></div>
                 <button id="swarmButton" style="background:#ff9800;">⚠️ SIMULASI SWARM ATTACK</button>
+                <button id="reportButton" style="background:#2196F3; color:white;">ANALISIS TAKTIS (AAR)</button>
                 <button id="resetButton" style="background:#444; color:#fff; margin-top:5px;">RESET SYSTEM</button>
             </div>
 
@@ -307,8 +355,41 @@
         <div id="recText">MEMUAT SISTEM...</div>
     </div>
 
+    <!-- Modal Laporan AAR -->
+    <div id="aarModal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:2000; overflow-y:auto; padding:20px;">
+        <div
+            style="background:#1e1e1e; max-width:900px; margin:auto; padding:20px; border:1px solid #03dac6; border-radius:8px;">
+            <h2 style="color:#03dac6; border-bottom:1px solid #333; padding-bottom:10px;">Tactical Decision Log (AAR)
+            </h2>
+            <p style="font-size:0.8rem; color:#aaa;">Data parameter 'Targeting Logic' dan efisiensi biaya tembakan.</p>
+            <table id="aarTable" style="width:100%; margin-top:20px; border-collapse: collapse;">
+                <thead>
+                    <tr style="color:#bb86fc; border-bottom: 2px solid #333;">
+                        <th style="padding:10px;">Waktu</th>
+                        <th style="padding:10px;">Sasaran</th>
+                        <th style="padding:10px;">Jarak (km)</th>
+                        <th style="padding:10px;">V_Radial</th>
+                        <th style="padding:10px;">Pk</th>
+                        <th style="padding:10px;">Hasil</th>
+                        <th style="padding:10px;">Justifikasi Skor</th>
+                    </tr>
+                </thead>
+                <tbody id="aarBody"></tbody>
+            </table>
+            <div style="margin-top:20px; display: flex; gap: 10px;">
+                <button id="downloadCsvButton"
+                    style="padding:10px 20px; cursor:pointer; background:#81c784; color:white; border:none; border-radius:4px; font-weight: bold; width: auto;">UNDUH
+                    CSV</button>
+                <button onclick="document.getElementById('aarModal').style.display='none'"
+                    style="padding:10px 20px; cursor:pointer; background:#cf6679; color:white; border:none; border-radius:4px; width: auto;">TUTUP</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Game Over Screen -->
-    <div id="gameOverModal">
+    <div id="gameOverModal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(207,102,121,0.9); z-index:3000; align-items:center; justify-content:center; flex-direction:column; color:white; text-align:center;">
         <h1>MISSION FAILED</h1>
         <p id="gameOverReason">Markas telah dihancurkan.</p>
         <button onclick="resetSimulation()" style="width: 200px; padding: 15px; font-size: 1.1rem;">RESTART

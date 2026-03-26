@@ -1135,267 +1135,257 @@ function updateStatsUI() {
 }
 
 // --- KONTROL PENGGUNA ---
+/**
+ * Inisialisasi Kontrol Pengguna dengan Fail-Safe Pattern.
+ * Mencegah error 'null' jika elemen HTML tidak ditemukan.
+ */
 function setupControls() {
     const fireButton = document.getElementById('fireButton');
     const weaponSelect = document.getElementById('weaponSelect');
     const resetButton = document.getElementById('resetButton');
     const reportButton = document.getElementById('reportButton');
-
-    // Event listener untuk cuaca
-    document.getElementById('weatherSelect').addEventListener('change', (e) => {
-        currentWeather = e.target.value;
-    });
-
-    reportButton.addEventListener('click', () => {
-        const modal = document.getElementById('aarModal');
-        const tbody = document.getElementById('aarBody');
-        tbody.innerHTML = '';
-
-        let hits = 0;
-        let overkillCount = 0;
-        let totalExpenditure = 0;
-
-        engagementHistory.forEach(log => {
-            if (log.result === 'HIT') hits++;
-            if (log.isOverkill) overkillCount++;
-            totalExpenditure += (log.weaponCost || 0);
-
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${log.time}</td>
-                <td><b>${log.type}</b></td>
-                <td>${(log.distance / 1000).toFixed(2)}</td>
-                <td>${log.closingSpeed.toFixed(1)}</td>
-                <td style="color:#03dac6">${log.pk || '-'}</td>
-                <td style="font-weight:bold; color:${log.result === 'HIT' ? '#81c784' : '#cf6679'}">${log.result || 'MISS'}</td>
-                <td style="font-size:0.75em; color:#aaa;">${log.justification}</td>
-            `;
-            tbody.appendChild(row);
-        });
-
-        // Tambahkan Kesimpulan Taktis (Summary Evaluation)
-        const modalContent = document.querySelector('#aarModal > div');
-        let summaryDiv = document.getElementById('aarSummary');
-        if (!summaryDiv) {
-            summaryDiv = document.createElement('div');
-            summaryDiv.id = 'aarSummary';
-            summaryDiv.style.marginTop = '20px';
-            summaryDiv.style.paddingTop = '15px';
-            summaryDiv.style.borderTop = '1px solid #444';
-            modalContent.appendChild(summaryDiv);
-        }
-
-        const accuracy = engagementHistory.length > 0 ? (hits / engagementHistory.length * 100).toFixed(1) : 0;
-        let evaluation = overkillCount > 2 ?
-            `<span style="color:#cf6679;">⚠️ KRITIK: Penggunaan amunisi boros (Overkill detected).</span>` :
-            `<span style="color:#81c784;">✅ PUJIAN: Disiplin amunisi sangat baik.</span>`;
-        if (missionStats.leaked > 0) evaluation = `<span style="color:#cf6679;">❌ FATAL: Pertahanan bocor, objek vital hancur!</span>`;
-
-        summaryDiv.innerHTML = `
-            <h3 style="color:#bb86fc;">Evaluasi Taktis (Rapor Danton)</h3>
-            <p>Akurasi: ${accuracy}% | Overkill: ${overkillCount} | Bocor: ${missionStats.leaked} | Total Pengeluaran & Kerugian: Rp ${totalExpenditure}jt</p>
-            <p>Kesimpulan: ${evaluation}</p>
-        `;
-
-        if (engagementHistory.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">Belum ada data penembakan.</td></tr>';
-            summaryDiv.innerHTML = '';
-        }
-        modal.style.display = 'flex';
-    });
-
-    // Fitur Ekspor Data ke CSV untuk Lampiran Tesis
-    document.getElementById('downloadCsvButton').addEventListener('click', () => {
-        if (engagementHistory.length === 0) {
-            alert("Belum ada data penembakan untuk diekspor.");
-            return;
-        }
-
-        // Header Kolom CSV
-        const headers = ["Waktu", "Sasaran", "Jarak (km)", "V_Radial (m/s)", "Pk (%)", "Hasil", "Overkill", "Biaya (Rp Juta)", "Justifikasi Algoritma"];
-
-        // Map data engagementHistory ke baris CSV
-        const rows = engagementHistory.map(log => [
-            log.time,
-            log.type,
-            (log.distance / 1000).toFixed(2),
-            log.closingSpeed.toFixed(1),
-            log.pk ? log.pk.replace('%', '') : "0",
-            log.result || "MISS",
-            log.isOverkill ? "YA" : "TIDAK",
-            log.weaponCost || 0,
-            `"${log.justification.replace(/"/g, '""')}"` // Escape double quotes untuk CSV
-        ]);
-
-        const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `AAR_GarudaEye_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.csv`);
-        link.click();
-        URL.revokeObjectURL(url);
-    });
-
-    resetButton.addEventListener('click', resetSimulation);
-
-    // Event listener untuk memilih target dari tabel
-    document.querySelector('#targetTable tbody').addEventListener('click', (event) => {
-        const row = event.target.closest('tr');
-        if (row && row.dataset.id) {
-            selectedTargetId = row.dataset.id;
-            updateUI(systemTracks); // Render ulang UI untuk menampilkan highlight
-        }
-    });
-
-    // Kontrol Pengaturan Gelar
+    const weatherSelect = document.getElementById('weatherSelect');
+    const downloadCsvButton = document.getElementById('downloadCsvButton');
     const radiusSlider = document.getElementById('defenseRadiusSlider');
-    const radiusValueLabel = document.getElementById('radiusValue');
     const applyLayoutButton = document.getElementById('applyLayoutButton');
+    const swarmButton = document.getElementById('swarmButton');
 
-    radiusSlider.addEventListener('input', () => {
-        radiusValueLabel.textContent = parseFloat(radiusSlider.value).toFixed(1);
-    });
-
-    applyLayoutButton.addEventListener('click', () => {
-        DEFENSE_RADIUS = parseFloat(radiusSlider.value) * 1000; // Konversi km ke meter
-        createDefenseLayout();
-    });
-
-    // Kontrol Swarm
-    document.getElementById('swarmButton').addEventListener('click', () => {
-        spawnSwarm();
-        const logDiv = document.getElementById('combatLog');
-        logDiv.innerHTML = `<span style="color:#ff9800; font-weight:bold;">PERINGATAN: SERANGAN SWARM TERDETEKSI!</span><br>` + logDiv.innerHTML;
-    });
-
-    // Kontrol Radar (Toggle)
-    [0, 1, 2].forEach(i => {
-        document.getElementById(`btnRadar${i}`).addEventListener('click', (e) => {
-            radarActive[i] = !radarActive[i];
-            e.target.style.opacity = radarActive[i] ? '1' : '0.4';
-            e.target.style.backgroundColor = radarActive[i] ? '#03dac6' : '#cf6679';
-            // Update visual 3D
-            if (radarMeshes[i]) radarMeshes[i].visible = radarActive[i];
-            if (radarRings[i]) radarRings[i].visible = radarActive[i];
+    // 1. Weather
+    if (weatherSelect) {
+        weatherSelect.addEventListener('change', (e) => {
+            currentWeather = e.target.value;
         });
-    });
+    }
 
-    // Update Zona Senjata saat ganti senjata
-    weaponSelect.addEventListener('change', updateWeaponZones);
+    // 2. Report/AAR
+    if (reportButton) {
+        reportButton.addEventListener('click', () => {
+            const modal = document.getElementById('aarModal');
+            const tbody = document.getElementById('aarBody');
+            if (!modal || !tbody) return;
 
-    fireButton.addEventListener('click', () => {
-        if (isGameOver) return;
+            tbody.innerHTML = '';
+            let hits = 0;
+            let overkillCount = 0;
+            let totalExpenditure = 0;
 
-        // Cari target: Gunakan yang dipilih manual ATAU otomatis ambil prioritas tertinggi
-        let targetToEngage = systemTracks.find(t => t.id === selectedTargetId);
+            engagementHistory.forEach(log => {
+                if (log.result === 'HIT') hits++;
+                if (log.isOverkill) overkillCount++;
+                totalExpenditure += (log.weaponCost || 0);
 
-        // Jika tidak ada target terpilih manual, ambil yang paling atas (paling berbahaya)
-        if (!targetToEngage && systemTracks.length > 0) {
-            targetToEngage = systemTracks[0];
-        }
-
-        if (targetToEngage) {
-
-            const weapon = weaponSelect.value;
-            const logDiv = document.getElementById('combatLog');
-
-            // Cek Status Reload
-            if (reloadingStatus[weapon]) {
-                logDiv.innerHTML = `<span style="color:#ffb74d;">GAGAL: Sedang reload ${weapon}...</span><br>` + logDiv.innerHTML;
-                return;
-            }
-
-            // Cek Ketersediaan Amunisi
-            if (currentAmmo[weapon] <= 0) {
-                // Mulai Reload Otomatis
-                reloadingStatus[weapon] = true;
-                updateAmmoUI();
-                logDiv.innerHTML = `<span style="color:#03dac6;">INFO: Memulai reload ${weapon} (${WEAPON_SPECS[weapon].reloadTime / 1000}s)...</span><br>` + logDiv.innerHTML;
-
-                setTimeout(() => {
-                    currentAmmo[weapon] = WEAPON_SPECS[weapon].maxAmmo;
-                    reloadingStatus[weapon] = false;
-                    updateAmmoUI();
-                    document.getElementById('combatLog').innerHTML = `<span style="color:#03dac6; font-weight:bold;">INFO: ${weapon} SIAP!</span><br>` + document.getElementById('combatLog').innerHTML;
-                }, WEAPON_SPECS[weapon].reloadTime);
-                return;
-            }
-
-            // Kurangi Amunisi
-            currentAmmo[weapon]--;
-            updateAmmoUI();
-            missionStats.shots++;
-
-            // --- SIMPAN DATA UNTUK BAHAN DEBAT (AAR) ---
-            const rcsVal = RCS_MAP[targetToEngage.classification] || 2;
-            const s_dist = ((RADAR_RANGE - targetToEngage.distance) / RADAR_RANGE).toFixed(2);
-            const s_speed = (Math.max(0, targetToEngage.closingSpeed || 0) / MAX_SPEED_REF).toFixed(2);
-
-            let justification = `Dist(${s_dist}*${WEIGHTS.DIST}) + Speed(${s_speed}*${WEIGHTS.SPEED}) + RCS(${rcsVal}/10*${WEIGHTS.RCS})`;
-            if (targetToEngage.distance < CRITICAL_RANGE) justification += ` + CRITICAL_BOOST(100)`;
-
-            // Cek Overkill: Rekomendasi MERIAM tapi Danton pakai Rudal (selain Oerlikon)
-            const isOverkill = targetToEngage.weaponRec.includes("MERIAM") && weapon !== "Oerlikon";
-
-            engagementHistory.push({
-                time: new Date().toLocaleTimeString(),
-                type: targetToEngage.classification.toUpperCase(),
-                distance: targetToEngage.distance,
-                closingSpeed: targetToEngage.closingSpeed || 0,
-                totalScore: targetToEngage.score,
-                justification: justification,
-                targetId: targetToEngage.id,
-                status: 'IN FLIGHT',
-                isOverkill: isOverkill,
-                weaponCost: WEAPON_SPECS[weapon].cost
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="padding:8px;">${log.time}</td>
+                    <td><b>${log.type}</b></td>
+                    <td>${(log.distance / 1000).toFixed(2)}</td>
+                    <td>${log.closingSpeed.toFixed(1)}</td>
+                    <td style="color:#03dac6">${log.pk || '-'}</td>
+                    <td style="font-weight:bold; color:${log.result === 'HIT' ? '#81c784' : '#cf6679'}">${log.result || 'MISS'}</td>
+                    <td style="font-size:0.75em; color:#aaa;">${log.justification}</td>
+                `;
+                tbody.appendChild(row);
             });
+            modal.style.display = 'flex';
+        });
+    }
 
-            // --- LOGIKA PELUNCURAN DARI LAUNCHER TERDEKAT ---
-            const realTarget = realTargets.find(t => t.id === targetToEngage.id);
-            if (realTarget) {
-                const targetPos = new THREE.Vector3(
-                    realTarget.x * SCENE_SCALE,
-                    realTarget.y * SCENE_SCALE,
-                    realTarget.z * SCENE_SCALE
-                );
-
-                // Cari launcher dengan jarak terpendek ke target
-                let nearestLauncher = null;
-                let minDist = Infinity;
-
-                launcherPositions.forEach(pos => {
-                    const d = pos.distanceTo(targetPos);
-                    if (d < minDist) {
-                        minDist = d;
-                        nearestLauncher = pos;
-                    }
-                });
-
-                if (nearestLauncher) {
-                    // Visualisasi: Asap di launcher & Jejak ke target
-                    spawnSmokeParticle(nearestLauncher);
-
-                    // Luncurkan Interceptor Fisik
-                    launchInterceptor(nearestLauncher, targetToEngage.id, weapon);
-
-                    // Log Peluncuran
-                    const distKm = (targetToEngage.distance / 1000).toFixed(1);
-                    logDiv.innerHTML = `<span style="color:#03dac6;">FOX-3!</span> Meluncurkan ${weapon} ke ${targetToEngage.classification} (${distKm}km)...<br>` + logDiv.innerHTML;
-                }
+    // 3. Download CSV
+    if (downloadCsvButton) {
+        downloadCsvButton.addEventListener('click', () => {
+            if (engagementHistory.length === 0) {
+                alert("Belum ada data penembakan.");
+                return;
             }
+            const headers = ["Waktu", "Sasaran", "Jarak (km)", "V_Radial (m/s)", "Pk (%)", "Hasil", "Overkill", "Biaya (Rp Juta)", "Justifikasi"];
+            const rows = engagementHistory.map(log => [
+                log.time, log.type, (log.distance / 1000).toFixed(2), log.closingSpeed.toFixed(1),
+                log.pk ? log.pk.replace('%', '') : "0", log.result || "MISS",
+                log.isOverkill ? "YA" : "TIDAK", log.weaponCost || 0, `"${log.justification}"`
+            ]);
+            const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `AAR_GarudaEye.csv`;
+            link.click();
+        });
+    }
 
+    // 4. Reset
+    if (resetButton) {
+        resetButton.addEventListener('click', resetSimulation);
+    }
+
+    // 5. Table Target Selection
+    const targetTableBody = document.querySelector('#targetTable tbody');
+    if (targetTableBody) {
+        targetTableBody.addEventListener('click', (event) => {
+            const row = event.target.closest('tr');
+            if (row && row.dataset.id) {
+                selectedTargetId = row.dataset.id;
+                updateUI(systemTracks);
+            }
+        });
+    }
+
+    // 6. Layout Radius
+    if (radiusSlider) {
+        const radiusValueLabel = document.getElementById('radiusValue');
+        radiusSlider.addEventListener('input', () => {
+            if (radiusValueLabel) radiusValueLabel.textContent = parseFloat(radiusSlider.value).toFixed(1);
+        });
+    }
+    if (applyLayoutButton) {
+        applyLayoutButton.addEventListener('click', () => {
+            if (radiusSlider) {
+                DEFENSE_RADIUS = parseFloat(radiusSlider.value) * 1000;
+                createDefenseLayout();
+            }
+        });
+    }
+
+    // 7. Swarm
+    if (swarmButton) {
+        swarmButton.addEventListener('click', () => {
+            spawnSwarm();
+            const logDiv = document.getElementById('combatLog');
+            if (logDiv) logDiv.innerHTML = `<span style="color:#ff9800; font-weight:bold;">PERINGATAN: SERANGAN SWARM!</span><br>` + logDiv.innerHTML;
+        });
+    }
+
+    // 8. Radar Toggles
+    [0, 1, 2].forEach(i => {
+        const btn = document.getElementById(`btnRadar${i}`);
+        if (btn) {
+            btn.addEventListener('click', (e) => {
+                radarActive[i] = !radarActive[i];
+                btn.style.opacity = radarActive[i] ? '1' : '0.4';
+                btn.style.backgroundColor = radarActive[i] ? '#03dac6' : '#cf6679';
+                if (radarMeshes[i]) radarMeshes[i].visible = radarActive[i];
+                if (radarRings[i]) radarRings[i].visible = radarActive[i];
+            });
         }
     });
 
+    // 9. Fire Button
+    if (fireButton) {
+        fireButton.addEventListener('click', () => {
+            if (isGameOver) return;
+            let targetToEngage = systemTracks.find(t => t.id === selectedTargetId) || systemTracks[0];
+            if (targetToEngage && weaponSelect) {
+                const weapon = weaponSelect.value;
+                executeFireLogic(targetToEngage, weapon);
+            }
+        });
+    }
+
+    // 10. Update Zona Senjata
+    if (weaponSelect) {
+        weaponSelect.addEventListener('change', updateWeaponZones);
+    }
+
+    // 11. Resize window
     window.addEventListener('resize', () => {
         const canvas = document.getElementById('sceneCanvas');
+        if (!canvas || !renderer || !camera) return;
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
         renderer.setSize(width, height, false);
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
     });
+
+    // Hilangkan loading overlay setelah inisialisasi selesai
+    const loaderOverlay = document.getElementById('loading-overlay');
+    if (loaderOverlay) loaderOverlay.style.display = 'none';
+}
+
+/**
+ * Logika Eksekusi Penembakan (Fire Logic)
+ * Mengelola amunisi, reload, dan peluncuran rudal secara modular.
+ */
+function executeFireLogic(targetToEngage, weapon) {
+    const logDiv = document.getElementById('combatLog');
+
+    // Cek Status Reload
+    if (reloadingStatus[weapon]) {
+        if (logDiv) logDiv.innerHTML = `<span style="color:#ffb74d;">GAGAL: Sedang reload ${weapon}...</span><br>` + logDiv.innerHTML;
+        return;
+    }
+
+    // Cek Ketersediaan Amunisi
+    if (currentAmmo[weapon] <= 0) {
+        reloadingStatus[weapon] = true;
+        updateAmmoUI();
+        if (logDiv) logDiv.innerHTML = `<span style="color:#03dac6;">INFO: Memulai reload ${weapon} (${WEAPON_SPECS[weapon].reloadTime / 1000}s)...</span><br>` + logDiv.innerHTML;
+
+        setTimeout(() => {
+            currentAmmo[weapon] = WEAPON_SPECS[weapon].maxAmmo;
+            reloadingStatus[weapon] = false;
+            updateAmmoUI();
+            if (logDiv) logDiv.innerHTML = `<span style="color:#03dac6; font-weight:bold;">INFO: ${weapon} SIAP!</span><br>` + logDiv.innerHTML;
+        }, WEAPON_SPECS[weapon].reloadTime);
+        return;
+    }
+
+    // Kurangi Amunisi
+    currentAmmo[weapon]--;
+    updateAmmoUI();
+    missionStats.shots++;
+
+    // --- SIMPAN DATA UNTUK BAHAN DEBAT (AAR) ---
+    const rcsVal = RCS_MAP[targetToEngage.classification] || 2;
+    const s_dist = ((RADAR_RANGE - targetToEngage.distance) / RADAR_RANGE).toFixed(2);
+    const s_speed = (Math.max(0, targetToEngage.closingSpeed || 0) / MAX_SPEED_REF).toFixed(2);
+
+    let justification = `Dist(${s_dist}*${WEIGHTS.DIST}) + Speed(${s_speed}*${WEIGHTS.SPEED}) + RCS(${rcsVal}/10*${WEIGHTS.RCS})`;
+    if (targetToEngage.distance < CRITICAL_RANGE) justification += ` + CRITICAL_BOOST(100)`;
+
+    const isOverkill = targetToEngage.weaponRec.includes("MERIAM") && weapon !== "Oerlikon";
+
+    engagementHistory.push({
+        time: new Date().toLocaleTimeString(),
+        type: targetToEngage.classification.toUpperCase(),
+        distance: targetToEngage.distance,
+        closingSpeed: targetToEngage.closingSpeed || 0,
+        totalScore: targetToEngage.score,
+        justification: justification,
+        targetId: targetToEngage.id,
+        status: 'IN FLIGHT',
+        isOverkill: isOverkill,
+        weaponCost: WEAPON_SPECS[weapon].cost
+    });
+
+    // --- LOGIKA PELUNCURAN DARI LAUNCHER TERDEKAT ---
+    const realTarget = realTargets.find(t => t.id === targetToEngage.id);
+    if (realTarget && launcherPositions.length > 0) {
+        const targetPos = new THREE.Vector3(
+            realTarget.x * SCENE_SCALE,
+            realTarget.y * SCENE_SCALE,
+            realTarget.z * SCENE_SCALE
+        );
+
+        let nearestLauncher = null;
+        let minDist = Infinity;
+
+        launcherPositions.forEach(pos => {
+            const d = pos.distanceTo(targetPos);
+            if (d < minDist) {
+                minDist = d;
+                nearestLauncher = pos;
+            }
+        });
+
+        if (nearestLauncher) {
+            spawnSmokeParticle(nearestLauncher);
+            launchInterceptor(nearestLauncher, targetToEngage.id, weapon);
+
+            const distKm = (targetToEngage.distance / 1000).toFixed(1);
+            if (logDiv) logDiv.innerHTML = `<span style="color:#03dac6;">FOX-3!</span> Meluncurkan ${weapon} ke ${targetToEngage.classification} (${distKm}km)...<br>` + logDiv.innerHTML;
+        }
+    }
 }
 
 function loadModels() {
