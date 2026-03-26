@@ -1168,11 +1168,21 @@ function setupControls() {
             let hits = 0;
             let overkillCount = 0;
             let totalExpenditure = 0;
+            let missileCost = 0;
+            let gunCost = 0;
+            let leakageCost = 0;
 
             engagementHistory.forEach(log => {
                 if (log.result === 'HIT') hits++;
                 if (log.isOverkill) overkillCount++;
                 totalExpenditure += (log.weaponCost || 0);
+                if (log.type.includes("LEAKAGE")) {
+                    leakageCost += (log.weaponCost || 0);
+                } else if (log.weaponCost === WEAPON_SPECS["Oerlikon"].cost) { // Asumsi Oerlikon adalah satu-satunya 'gun'
+                    gunCost += (log.weaponCost || 0);
+                } else { // Asumsi lainnya adalah 'missile'
+                    missileCost += (log.weaponCost || 0);
+                }
 
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -1182,10 +1192,82 @@ function setupControls() {
                     <td>${log.closingSpeed.toFixed(1)}</td>
                     <td style="color:#03dac6">${log.pk || '-'}</td>
                     <td style="font-weight:bold; color:${log.result === 'HIT' ? '#81c784' : '#cf6679'}">${log.result || 'MISS'}</td>
+                    <td style="color:#81c784">Rp ${log.weaponCost || 0}jt</td>
                     <td style="font-size:0.75em; color:#aaa;">${log.justification}</td>
                 `;
                 tbody.appendChild(row);
             });
+
+            // Tambahkan baris Total Pengeluaran di bagian bawah tabel
+            if (engagementHistory.length > 0) {
+                const totalRow = document.createElement('tr');
+                totalRow.style.borderTop = "2px solid #555";
+                totalRow.style.background = "rgba(3, 218, 198, 0.1)"; // Background cyan transparan
+                totalRow.innerHTML = `
+                    <td colspan="6" style="text-align:right; padding:10px; font-weight:bold; color:#03dac6;">TOTAL PENGELUARAN & KERUGIAN:</td>
+                    <td style="padding:10px; font-weight:bold; color:#81c784">Rp ${totalExpenditure}jt</td>
+                    <td></td>
+                `;
+                tbody.appendChild(totalRow);
+            }
+
+            // Tambahkan baris Rata-rata Biaya per Kill
+            if (engagementHistory.length > 0) {
+                const avgCostPerKill = missionStats.kills > 0 ? (totalExpenditure / missionStats.kills).toFixed(1) : 0;
+                const avgRow = document.createElement('tr');
+                avgRow.style.background = "rgba(255, 235, 59, 0.05)"; // Kuning sangat transparan
+                avgRow.innerHTML = `
+                    <td colspan="6" style="text-align:right; padding:10px; font-weight:bold; color:#ffeb3b;">RATA-RATA BIAYA PER KILL (Efisiensi):</td>
+                    <td style="padding:10px; font-weight:bold; color:#ffeb3b">Rp ${avgCostPerKill}jt</td>
+                    <td></td>
+                `;
+                tbody.appendChild(avgRow);
+            }
+
+            // --- Pie Chart untuk Distribusi Biaya & Kerugian ---
+            const pieChartContainer = document.createElement('div');
+            pieChartContainer.className = 'pie-chart-container';
+
+            const totalPieValue = missileCost + gunCost + leakageCost;
+            let missilePercentage = totalPieValue > 0 ? (missileCost / totalPieValue) * 100 : 0;
+            let gunPercentage = totalPieValue > 0 ? (gunCost / totalPieValue) * 100 : 0;
+            let leakagePercentage = totalPieValue > 0 ? (leakageCost / totalPieValue) * 100 : 0;
+
+            let gradientString = [];
+            let currentStart = 0;
+
+            if (missilePercentage > 0) {
+                let end = currentStart + missilePercentage;
+                gradientString.push(`var(--missile-color) ${currentStart}% ${end}%`);
+                currentStart = end;
+            }
+            if (gunPercentage > 0) {
+                let end = currentStart + gunPercentage;
+                gradientString.push(`var(--gun-color) ${currentStart}% ${end}%`);
+                currentStart = end;
+            }
+            if (leakagePercentage > 0) {
+                let end = currentStart + leakagePercentage;
+                gradientString.push(`var(--leakage-color) ${currentStart}% ${end}%`);
+                currentStart = end;
+            }
+
+            let conicGradient = `conic-gradient(${gradientString.join(', ')})`;
+            if (gradientString.length === 0) {
+                conicGradient = `conic-gradient(transparent)`; // Jika tidak ada data, buat transparan
+            }
+
+            pieChartContainer.innerHTML = `
+                <h4 style="color:#bb86fc; margin-top:20px; border-top:1px solid #333; padding-top:15px;">Distribusi Biaya & Kerugian</h4>
+                <div class="pie-chart" style="background: ${conicGradient};"></div>
+                <div class="pie-chart-legend">
+                    <div><span class="legend-color" style="background-color: var(--missile-color);"></span> Rudal (${missilePercentage.toFixed(1)}%)</div>
+                    <div><span class="legend-color" style="background-color: var(--gun-color);"></span> Meriam (${gunPercentage.toFixed(1)}%)</div>
+                    <div><span class="legend-color" style="background-color: var(--leakage-color);"></span> Kebocoran (${leakagePercentage.toFixed(1)}%)</div>
+                </div>
+            `;
+            modal.querySelector('#aarModal > div').appendChild(pieChartContainer);
+
             modal.style.display = 'flex';
         });
     }
@@ -1201,7 +1283,7 @@ function setupControls() {
             const rows = engagementHistory.map(log => [
                 log.time, log.type, (log.distance / 1000).toFixed(2), log.closingSpeed.toFixed(1),
                 log.pk ? log.pk.replace('%', '') : "0", log.result || "MISS",
-                log.isOverkill ? "YA" : "TIDAK", log.weaponCost || 0, `"${log.justification}"`
+                log.isOverkill ? "YA" : "TIDAK", `Rp ${log.weaponCost || 0}jt`, `"${log.justification}"`
             ]);
             const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

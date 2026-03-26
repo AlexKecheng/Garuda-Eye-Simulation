@@ -164,6 +164,52 @@ td {
     padding: 12px;
 }
 
+/* --- PIE CHART STYLING --- */
+#aarModal {
+    --missile-color: #03dac6;
+    /* Cyan */
+    --gun-color: #ffeb3b;
+    /* Yellow */
+    --leakage-color: #cf6679;
+    /* Red */
+}
+
+.pie-chart-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #333;
+}
+
+.pie-chart {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    margin-bottom: 15px;
+    /* Background conic-gradient akan di-generate oleh JS */
+}
+
+.pie-chart-legend {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    font-size: 0.85rem;
+}
+
+.pie-chart-legend>div {
+    display: flex;
+    align-items: center;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: 5px;
+}
+
 /* --- ANIMASI & SELEKSI --- */
 .target-row:hover {
     background-color: #2a2a2a;
