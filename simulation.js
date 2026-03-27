@@ -1179,6 +1179,11 @@ function updateUI(prioritized) {
     const selectedTarget = prioritized.find(t => t.id === selectedTargetId);
     const topTarget = selectedTarget || prioritized[0];
 
+    if (!actionPanel) {
+        console.warn("Sistem Taktis: Elemen 'actionPanel' tidak ditemukan di DOM. Update HUD dibatalkan.");
+        return;
+    }
+
     if (topTarget && !isGameOver) {
         const weapon = document.getElementById('weaponSelect').value;
         const specs = WEAPON_SPECS[weapon];
@@ -1787,6 +1792,8 @@ function startSimulation() {
     const actionPanel = document.getElementById('actionPanel');
     if (actionPanel) {
         actionPanel.innerHTML = `<div class="action-card" style="grid-column: span 2; text-align: center; color: #03dac6;">MENGINISIALISASI SISTEM TAKTIS...</div>`;
+    } else {
+        console.error("KRITIS: Elemen 'actionPanel' tidak ditemukan! Pastikan Anda menggunakan index.html atau tambahkan <div id='actionPanel'></div>");
     }
 
     loadModels().then(() => {
