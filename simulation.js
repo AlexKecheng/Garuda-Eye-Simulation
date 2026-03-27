@@ -65,6 +65,62 @@ const WEAPON_SPECS = {
     "Oerlikon": { maxRange: 4000, pk: 70, maxAmmo: 100, reloadTime: 2000, cost: 5 }     // Rp 5 Juta
 };
 
+/**
+ * MODUL 5: MONTE CARLO SIMULATOR
+ * Menambahkan variabel 'Human Error' (Waktu Reaksi Operator)
+ */
+const AssetArhanud = { weapons: WEAPON_SPECS };
+const MonteCarloEngine = {
+    run(scenario, iterations = 1000) {
+        let wins = 0;
+        let totalKills = 0;
+        for (let i = 0; i < iterations; i++) {
+            const weatherVar = Object.keys(WEATHER_MODIFIERS)[Math.floor(Math.random() * 3)];
+            const hasFailure = Math.random() > 0.98; // 2% kegagalan sistem acak
+            const simResult = this.simulateBatch(scenario, weatherVar, hasFailure);
+            if (simResult.success) wins++;
+            totalKills += simResult.kills;
+        }
+        this.displayResults((wins / iterations) * 100, totalKills / iterations);
+    },
+    simulateBatch(scenario, weather, hasFailure) {
+        let kills = 0;
+        let success = true;
+
+        // --- VARIABEL HUMAN ERROR ---
+        // Mensimulasikan waktu reaksi operator (dalam detik)
+        // Rata-rata reaksi manusia dalam kondisi stres adalah 1.5 - 5 detik.
+        const reactionTime = 1.5 + (Math.random() * 3.5);
+
+        scenario.targets.forEach(t => {
+            // Hitung TTI (Time To Impact) secara akurat berdasarkan posisi kartesius
+            const dist = Math.sqrt(t.x ** 2 + t.z ** 2);
+            const dot = t.x * t.vx + t.y * t.vy + t.z * t.vz;
+            const closingSpeed = dist > 0 ? -(dot / dist) : t.speed;
+            const tti = dist / (closingSpeed || 1);
+
+            // LOGIKA TAKTIS: Jika waktu benturan lebih cepat dari reaksi operator, 
+            // pertahanan dianggap gagal merespon tepat waktu (Target Leak).
+            if (tti < reactionTime) {
+                success = false;
+                return;
+            }
+
+            const pkMod = WEATHER_MODIFIERS[weather] || 1.0;
+            const finalPk = (scenario.weapon.pk / 100) * pkMod * (hasFailure ? 0.6 : 1.0);
+            if (Math.random() < finalPk) kills++;
+            else if (tti < 10) success = false; // Kebocoran jika meleset di jarak kritis
+        });
+        return { success, kills };
+    },
+    displayResults(winRate, avgKills) {
+        const logDiv = document.getElementById('combatLog');
+        const msg = `MONTE CARLO (1000x): Success ${winRate.toFixed(1)}%, Avg Kills ${avgKills.toFixed(1)}. ${winRate > 80 ? 'TAKTIK VALID' : 'RESIKO TINGGI'}`;
+        if (logDiv) logDiv.innerHTML = `<div style="color:#bb86fc; border:1px solid #333; padding:5px; margin-bottom:5px;">${msg}</div>` + logDiv.innerHTML;
+        alert(msg);
+    }
+};
+
 // --- STATE SIMULASI ---
 let systemTracks = []; // Apa yang dilihat oleh sistem (hasil fusi)
 let realTargets = [];  // Ground Truth (Posisi asli objek di dunia nyata)
@@ -81,14 +137,16 @@ let defenseSiteMeshes = []; // Menyimpan semua objek 3D dari site pertahanan
 let isGameOver = false;
 let simIntervalId;
 
-// --- KONFIGURASI MCDM ---
+// --- KONFIGURASI MCDM (Dynamic Threat Assessment) ---
 const WEIGHTS = {
-    DIST: 0.4,
-    SPEED: 0.3,
-    ANGLE: 0.2,
-    RCS: 0.1
+    TTI: 0.45,       // Urgensi (Waktu menuju benturan)
+    STRATEGIC: 0.30, // Nilai Strategis (Tipe sasaran)
+    DIRECTNESS: 0.10,// Arah serangan (Radial vs Tangensial)
+    CONFIDENCE: 0.15 // Faktor Keyakinan Data
 };
 const MAX_SPEED_REF = 1000; // m/s
+const MAX_TTI_REF = 300;    // 5 Menit (Window penilaian urgensi)
+const MAX_RCS_REF = 10;
 const RCS_MAP = { "missile": 10, "airplane": 5, "helicopter": 3, "drone": 1, "unknown": 2 };
 let currentWeather = "Clear";
 const WEATHER_MODIFIERS = { "Clear": 1.0, "Rain": 0.75, "Storm": 0.6 };
@@ -146,6 +204,42 @@ function getBearingAndDistance(lat1, lon1, lat2, lon2) {
     const brng = (θ * 180 / Math.PI + 360) % 360;
 
     return { distance: d, angle: brng };
+}
+
+/**
+ * Algoritma 3D Line of Sight (LoS)
+ * Memeriksa apakah garis antara observer dan target terhalang oleh rintangan medan (Gunung).
+ */
+function checkLineOfSight(obsPos, targetPos) {
+    const A = targetPos.x - obsPos.x;
+    const B = targetPos.z - obsPos.z;
+    const C = MOUNTAIN_CONFIG.x - obsPos.x;
+    const D = MOUNTAIN_CONFIG.z - obsPos.z;
+
+    const dot = A * C + B * D;
+    const len_sq = A * A + B * B;
+    let param = -1;
+    if (len_sq !== 0) param = dot / len_sq;
+
+    let xx, zz;
+    if (param < 0) { xx = obsPos.x; zz = obsPos.z; }
+    else if (param > 1) { xx = targetPos.x; zz = targetPos.z; }
+    else { xx = obsPos.x + param * A; zz = obsPos.z + param * B; }
+
+    const dx = MOUNTAIN_CONFIG.x - xx;
+    const dz = MOUNTAIN_CONFIG.z - zz;
+    const distToMountainCenter = Math.sqrt(dx * dx + dz * dz);
+
+    if (distToMountainCenter < MOUNTAIN_CONFIG.radius) {
+        const distObsToMountain = Math.sqrt(C * C + D * D);
+        const distObsToTarget = Math.sqrt(A * A + B * B);
+        if (distObsToTarget > distObsToMountain) {
+            const ratio = distObsToMountain / distObsToTarget;
+            const losHeightAtMountain = obsPos.y + (targetPos.y - obsPos.y) * ratio;
+            if (losHeightAtMountain < MOUNTAIN_CONFIG.height) return false;
+        }
+    }
+    return true;
 }
 
 // --- GROUND TRUTH (DUNIA NYATA) ---
@@ -333,50 +427,11 @@ function generateSensorData() {
             // Koreksi: DEFENSE_RADIUS di generateSensorData menggunakan satuan meter (real world logic)
             const rx_m = Math.cos(rAngle) * DEFENSE_RADIUS;
             const rz_m = Math.sin(rAngle) * DEFENSE_RADIUS;
-
-            // Jarak Target ke Radar ini
             const distToRadar = Math.sqrt((t.x - rx_m) ** 2 + (t.z - rz_m) ** 2);
-
-            // 1. Cek Jangkauan Maksimum
             if (distToRadar > RADAR_RANGE) continue;
-
-            // 2. Cek Blind Spot Elevasi (Radar Horizon / Clutter)
-            // Sudut elevasi = atan(ketinggian / jarak_mendatar)
             const elevationAngle = Math.atan2(t.y, distToRadar) * (180 / Math.PI);
-            if (elevationAngle < MIN_ELEVATION_ANGLE) continue; // Target terlalu rendah/tenggelam di horizon
-
-            // 3. Cek Rintangan Medan (Gunung) - Line of Sight Check
-            // Menggunakan rumus jarak titik ke garis (Line Segment)
-            // Garis: Radar(rx_m, rz_m) ke Target(t.x, t.z)
-            // Titik: Gunung(MOUNTAIN_CONFIG.x, MOUNTAIN_CONFIG.z)
-            const A = t.x - rx_m;
-            const B = t.z - rz_m;
-            const C = MOUNTAIN_CONFIG.x - rx_m;
-            const D = MOUNTAIN_CONFIG.z - rz_m;
-
-            const dot = A * C + B * D;
-            const len_sq = A * A + B * B;
-            let param = -1;
-            if (len_sq !== 0) param = dot / len_sq;
-
-            let xx, zz;
-            if (param < 0) { xx = rx_m; zz = rz_m; }
-            else if (param > 1) { xx = t.x; zz = t.z; }
-            else { xx = rx_m + param * A; zz = rz_m + param * B; }
-
-            const dx = MOUNTAIN_CONFIG.x - xx;
-            const dz = MOUNTAIN_CONFIG.z - zz;
-            const distToMountainCenter = Math.sqrt(dx * dx + dz * dz);
-
-            // Jika garis pandang memotong radius gunung DAN target di balik gunung DAN target lebih rendah dari gunung
-            if (distToMountainCenter < MOUNTAIN_CONFIG.radius) {
-                const distRadarToMountain = Math.sqrt((MOUNTAIN_CONFIG.x - rx_m) ** 2 + (MOUNTAIN_CONFIG.z - rz_m) ** 2);
-                if (distToRadar > distRadarToMountain && t.y < MOUNTAIN_CONFIG.height) {
-                    continue; // BLOCKED BY TERRAIN
-                }
-            }
-
-            // Jika lolos semua cek, target terdeteksi
+            if (elevationAngle < MIN_ELEVATION_ANGLE) continue;
+            if (!checkLineOfSight({ x: rx_m, y: 5, z: rz_m }, t)) continue;
             detectedByRadar = true;
         }
 
@@ -398,6 +453,7 @@ function generateSensorData() {
             radar.push({
                 distance: noisyDist,
                 angle: noisyAngle,
+                speed: t.speed,
                 closingSpeed: closingSpeed, // Data baru: Kecepatan radial
                 trueId: t.id
             });
@@ -427,21 +483,18 @@ function generateSensorData() {
 }
 
 function processData(camera, radar) {
-    // Fusi Data: Mencocokkan Radar & Kamera berdasarkan SUDUT (Bearing)
+    // 1. Fusi Data: Mencocokkan Radar & Kamera berdasarkan SUDUT (Bearing)
     let fused = [];
-    let radarUsed = new Set();
     let cameraUsed = new Set();
 
-    // 1. Loop Radar, cari Kamera yang sudutnya mirip
     radar.forEach((r, rIdx) => {
         let bestCamIdx = -1;
-        let minDiff = 10; // Toleransi 10 derajat
+        let minDiff = 10;
 
         camera.forEach((c, cIdx) => {
             if (cameraUsed.has(cIdx)) return;
-
             let diff = Math.abs(r.angle - c.angle);
-            if (diff > 180) diff = 360 - diff; // Handle crossing 0/360
+            if (diff > 180) diff = 360 - diff;
 
             if (diff < minDiff) {
                 minDiff = diff;
@@ -450,71 +503,107 @@ function processData(camera, radar) {
         });
 
         if (bestCamIdx !== -1) {
-            // MATCH: Objek teridentifikasi
             cameraUsed.add(bestCamIdx);
             fused.push({
-                id: r.trueId, // Internal tracking
+                id: r.trueId,
                 classification: camera[bestCamIdx].label,
                 distance: r.distance,
                 angle: r.angle,
-                closingSpeed: r.closingSpeed, // Teruskan data kecepatan
+                speed: r.speed,
+                closingSpeed: r.closingSpeed,
                 source: "FUSED"
             });
         } else {
-            // NO MATCH: Objek tak dikenal (hanya radar)
             fused.push({
                 id: r.trueId,
                 classification: "unknown",
                 distance: r.distance,
                 angle: r.angle,
-                closingSpeed: r.closingSpeed, // Teruskan data kecepatan
+                speed: r.speed,
+                closingSpeed: r.closingSpeed,
                 source: "RADAR"
             });
         }
     });
 
-    // Hitung Skor Prioritas (ALGORITMA BARU)
+    // 2. Algoritma Optimasi Penentuan Prioritas (Objective Function)
+    // Menggunakan Linear Weighted Sum yang merupakan basis dari ILP dalam penentuan bobot target
     fused.forEach(obj => {
-        // Normalisasi 0.0 - 1.0
-        const s_dist = (RADAR_RANGE - Math.min(obj.distance, RADAR_RANGE)) / RADAR_RANGE;
-        const s_speed = Math.max(0, Math.min(obj.closingSpeed || 0, MAX_SPEED_REF)) / MAX_SPEED_REF;
+        const realTarget = realTargets.find(rt => rt.id === obj.id);
+        // 1. Time to Impact (TTI) - Semakin kecil TTI, semakin tinggi skornya
+        let s_tti = 0;
+        if (obj.closingSpeed > 0) {
+            const tti = obj.distance / obj.closingSpeed;
+            s_tti = Math.max(0, 1 - (tti / MAX_TTI_REF));
+        }
 
-        // Simulasi Aspect Angle: Semakin kecil angle, semakin mengarah ke pusat (cos(0)=1)
-        // Di simulasi ini, kita anggap target yang closing speednya tinggi punya angle menuju pusat yang kecil
-        const s_angle = Math.max(0, (obj.closingSpeed || 0) > 0 ? 0.8 : 0.2);
-        const s_rcs = (RCS_MAP[obj.classification] || 2) / 10;
+        // 2. Strategic Threat Value (Berdasarkan Tipe)
+        const s_strategic = (RCS_MAP[obj.classification] || 4) / MAX_RCS_REF;
 
-        // Hitung Skor Akhir
-        const total = (s_dist * WEIGHTS.DIST) +
-            (s_speed * WEIGHTS.SPEED) +
-            (s_angle * WEIGHTS.ANGLE) +
-            (s_rcs * WEIGHTS.RCS);
+        // 3. Directness (Seberapa tegak lurus sasaran menuju IKN)
+        const s_direct = obj.speed > 0 ? Math.max(0, (obj.closingSpeed || 0) / obj.speed) : 0;
+
+        // 4. Engageability (Pk & Ammo Check)
+        let maxAvailablePk = 0;
+        for (const [wName, wSpecs] of Object.entries(WEAPON_SPECS)) {
+            if (obj.distance <= wSpecs.maxRange && currentAmmo[wName] > 0 && !reloadingStatus[wName]) {
+                maxAvailablePk = Math.max(maxAvailablePk, wSpecs.pk / 100);
+            }
+        }
+        const s_pkAvail = maxAvailablePk;
+
+        const total = (s_tti * WEIGHTS.TTI) +
+            (s_strategic * WEIGHTS.STRATEGIC) +
+            (s_direct * WEIGHTS.DIRECTNESS) +
+            (s_pkAvail * WEIGHTS.PK_AVAIL);
 
         obj.score = Math.round(total * 100);
-        if (obj.distance < CRITICAL_RANGE) obj.score += 100; // Hard override for critical
+        if (obj.distance < CRITICAL_RANGE) obj.score += 100;
 
-        // --- LOGIKA ALOKASI SENJATA (ECONOMY OF WAR) ---
-        const GUN_RANGE_MAX = 5000;
-        const MISSILE_RANGE_MAX = 25000;
-        const rcs = RCS_MAP[obj.classification] || 2;
-        const speed = obj.closingSpeed || 0;
+        // 3. Optimization Solver untuk Alokasi Senjata (Weapon-Target Assignment)
+        // Mencari Max(Pk / Cost) berdasarkan kendala Range dan Amunisi
+        obj.weaponRec = "PANTAU";
+        let bestEfficiency = -1;
 
-        if (obj.distance > MISSILE_RANGE_MAX) {
+        for (const [wName, wSpecs] of Object.entries(WEAPON_SPECS)) {
+            if (obj.distance <= wSpecs.maxRange && realTarget) {
+                // Constraint 2: Amunisi (Check state global)
+                if (currentAmmo[wName] > 0 && !reloadingStatus[wName]) {
+                    // Constraint 3: Geometri LoS untuk Launcher
+                    let hasLoS = false;
+                    for (let launcherPos of launcherPositions) {
+                        const realLauncherPos = {
+                            x: launcherPos.x / SCENE_SCALE,
+                            y: launcherPos.y / SCENE_SCALE,
+                            z: launcherPos.z / SCENE_SCALE
+                        };
+                        if (checkLineOfSight(realLauncherPos, realTarget)) {
+                            hasLoS = true;
+                            break;
+                        }
+                    }
+                    if (!hasLoS) continue;
+
+                    // Kalkulasi Pk Estimasi (Heuristic)
+                    const estPk = (wSpecs.pk / 100) * (1 - (obj.distance / wSpecs.maxRange));
+
+                    // Objective: Maximize Profit (Pk) / Cost
+                    // Kita tambahkan pengali kecil agar rudal mahal tetap terpilih jika skor target sangat tinggi
+                    const efficiency = (estPk * obj.score) / (wSpecs.cost || 1);
+
+                    if (efficiency > bestEfficiency) {
+                        bestEfficiency = efficiency;
+                        obj.weaponRec = `${wName.toUpperCase()} (OPTIMAL)`;
+                    }
+                }
+            }
+        }
+
+        if (obj.weaponRec === "PANTAU" && obj.distance > 40000) {
             obj.weaponRec = "PANTAU (OUT OF RANGE)";
-        } else if (obj.score > 80 && obj.distance > GUN_RANGE_MAX) {
-            obj.weaponRec = "RUDAL (PRIORITAS ANCAMAN)";
-        } else if (speed > 800) {
-            obj.weaponRec = "RUDAL (PRIORITAS SPEED)";
-        } else if (rcs < 3 && obj.distance <= GUN_RANGE_MAX) {
-            obj.weaponRec = "MERIAM (EFISIENSI BIAYA)";
-        } else if (obj.distance <= GUN_RANGE_MAX) {
-            obj.weaponRec = "MERIAM (OPTIMAL)";
-        } else {
-            obj.weaponRec = "RUDAL (OPTIMAL)";
         }
     });
 
-    // Urutkan
     return fused.sort((a, b) => b.score - a.score);
 }
 
@@ -1086,20 +1175,40 @@ function updateUI(prioritized) {
         tbody.appendChild(row);
     });
 
-    const recText = document.getElementById('recText');
+    const actionPanel = document.getElementById('actionPanel');
     const selectedTarget = prioritized.find(t => t.id === selectedTargetId);
+    const topTarget = selectedTarget || prioritized[0];
 
-    if (selectedTarget) {
-        recText.innerHTML = `TARGET TERPILIH: <b>${selectedTarget.classification.toUpperCase()}</b> (Skor: ${selectedTarget.score})`;
-        fireButton.disabled = false;
-    } else if (prioritized.length > 0 && !isGameOver) {
-        const top = prioritized[0];
-        recText.innerHTML = `ANCMAN TERDETEKSI. Siap tembak: <b>${top.classification.toUpperCase()}</b>`;
+    if (topTarget && !isGameOver) {
+        const weapon = document.getElementById('weaponSelect').value;
+        const specs = WEAPON_SPECS[weapon];
+        const estPk = (specs.pk * (1 - (topTarget.distance / specs.maxRange))).toFixed(0);
+        const cost = specs.cost;
+
+        actionPanel.innerHTML = `
+            <div class="action-card primary" onclick="executeFireLogicByTarget('${topTarget.id}')">
+                <div style="color: #cf6679; font-weight: bold; font-size: 0.8rem;">OPSI 1: INTERSEPSI SEGERA</div>
+                <div style="font-size: 1.1rem; margin: 5px 0;">Tembak ${topTarget.classification.toUpperCase()}</div>
+                <div style="font-size: 0.8rem; color: #aaa;">Probabilitas: ${estPk}% | Biaya: Rp ${cost}jt</div>
+            </div>
+            <div class="action-card secondary" onclick="alert('Tactical Hold: Mengamati pergerakan...')">
+                <div style="color: #81c784; font-weight: bold; font-size: 0.8rem;">OPSI 2: HEMAT AMUNISI</div>
+                <div style="font-size: 1.1rem; margin: 5px 0;">Pantau & Verifikasi</div>
+                <div style="font-size: 0.8rem; color: #aaa;">Risiko Kebocoran: ${topTarget.score > 80 ? 'TINGGI' : 'RENDAH'}</div>
+            </div>
+        `;
         fireButton.disabled = false;
     } else {
-        recText.textContent = "Tidak ada ancaman terdeteksi.";
+        actionPanel.innerHTML = `<div class="action-card" style="grid-column: span 2; text-align: center; color: #81c784;">SEKTOR AMAN - TIDAK ADA ANCAMAN AKTIF</div>`;
         fireButton.disabled = true;
     }
+}
+
+/** Helper untuk eksekusi via HUD */
+function executeFireLogicByTarget(targetId) {
+    const target = systemTracks.find(t => t.id === targetId);
+    const weapon = document.getElementById('weaponSelect').value;
+    if (target) executeFireLogic(target, weapon);
 }
 
 function updateAmmoUI() {
@@ -1360,6 +1469,21 @@ function setupControls() {
                 const weapon = weaponSelect.value;
                 executeFireLogic(targetToEngage, weapon);
             }
+        });
+    }
+
+    // Monte Carlo Analysis Trigger
+    const mcButton = document.getElementById('monteCarloButton');
+    if (mcButton) {
+        mcButton.addEventListener('click', () => {
+            const selectedWeapon = document.getElementById('weaponSelect').value;
+            const scenario = {
+                targets: realTargets.slice(0, 5), // Ambil 5 target terdepan sebagai sampel
+                weapon: AssetArhanud.weapons[selectedWeapon]
+            };
+            if (scenario.targets.length === 0) return alert("Butuh target aktif untuk analisis.");
+
+            MonteCarloEngine.run(scenario, 1000);
         });
     }
 

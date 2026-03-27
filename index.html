@@ -10,7 +10,7 @@
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #0b1026;
+            background-color: #050814;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #e0e0e0;
         }
@@ -47,7 +47,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #03dac6;
+            border-bottom: 2px solid #00ff41;
+            /* Tactical Green */
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
             pointer-events: auto;
         }
 
@@ -55,7 +57,7 @@
             margin: 0;
             font-size: 1.2rem;
             letter-spacing: 2px;
-            color: #03dac6;
+            color: #00ff41;
             text-transform: uppercase;
         }
 
@@ -76,9 +78,10 @@
         /* Sidebars */
         .sidebar {
             width: 300px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid #333;
+            background: rgba(5, 8, 20, 0.85);
+            border: 1px solid rgba(0, 255, 65, 0.3);
             padding: 10px;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -118,7 +121,7 @@
         }
 
         th {
-            color: #03dac6;
+            color: #00ff41;
         }
 
         tr.selected-row {
@@ -133,7 +136,7 @@
 
         /* Buttons & Inputs */
         button {
-            background: #03dac6;
+            background: #00ff41;
             color: #000;
             border: none;
             padding: 8px 15px;
@@ -145,7 +148,7 @@
         }
 
         button:hover {
-            background: #00b3a3;
+            background: #00cc33;
         }
 
         button:disabled {
@@ -191,7 +194,7 @@
             flex: 1;
             padding: 5px;
             font-size: 0.7rem;
-            background: #03dac6;
+            background: #00ff41;
             border: none;
             color: #000;
             cursor: pointer;
@@ -212,14 +215,36 @@
         }
 
         /* Notification Area */
-        #recText {
-            text-align: center;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            font-size: 1rem;
-            border-top: 2px solid #cf6679;
+        #actionPanel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 15px;
+            background: rgba(5, 8, 20, 0.95);
+            border-top: 2px solid #00ff41;
             pointer-events: auto;
+        }
+
+        .action-card {
+            border: 1px solid #444;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .action-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .action-card.primary {
+            border-color: #cf6679;
+            background: rgba(207, 102, 121, 0.1);
+        }
+
+        .action-card.secondary {
+            border-color: #81c784;
+            background: rgba(129, 199, 132, 0.1);
         }
 
         /* Loading Overlay */
@@ -320,6 +345,8 @@
                 <div id="ammoDisplay" style="display: flex; gap: 5px; margin-bottom: 10px;"></div>
                 <button id="fireButton" class="danger" disabled>TEMBAK (FIRE)</button>
 
+                <button id="monteCarloButton" style="background:#bb86fc; color:#000; margin-top:10px;">📊 ANALISIS MONTE
+                    CARLO (1000x)</button>
                 <div style="margin-top: 20px;"></div>
                 <button id="swarmButton" style="background:#ff9800;">⚠️ SIMULASI SWARM ATTACK</button>
                 <button id="reportButton" style="background:#2196F3; color:white;">ANALISIS TAKTIS (AAR)</button>
@@ -352,7 +379,9 @@
         </div>
 
         <!-- Bottom Notification -->
-        <div id="recText">MEMUAT SISTEM...</div>
+        <div id="actionPanel">
+            <div class="action-card" style="grid-column: span 2; text-align: center;">MEMUAT SISTEM TAKTIS...</div>
+        </div>
     </div>
 
     <!-- Modal Laporan AAR -->

@@ -8,6 +8,14 @@ WEATHER_MODIFIERS = {
     "Storm": 0.6
 }
 
+# Definisi Topografi (Sinkron dengan simulation.js)
+MOUNTAIN_CONFIG = {
+    "x": 25000,
+    "z": 10000,
+    "radius": 6000,
+    "height": 5000
+}
+
 class SensorSimulator:
     def __init__(self):
         # daftar tipe objek yang bisa “dikecam”
@@ -26,15 +34,20 @@ class SensorSimulator:
             detections.append({"label": label, "bbox": bbox})
         return detections
 
-    def get_radar_data(self) -> List[Dict]:
+    def get_radar_data(self, is_jamming: bool = False) -> List[Dict]:
         """
-        Return list radar: jarak dan sudut.
+        Return list radar dengan variabel noise dan confidence.
         """
         returns = []
-        for _ in range(random.randint(0, 3)):
+        noise_level = 500 if is_jamming else 100
+        accuracy = 0.6 if is_jamming else 0.9
+
+        for _ in range(random.randint(1, 4)):
+            distance = random.uniform(500, 25000)
             returns.append({
-                "distance": random.uniform(100, 3000),
-                "angle": random.uniform(-45, 45)
+                "distance": distance + random.uniform(-noise_level, noise_level),
+                "angle": random.uniform(0, 360),
+                "confidence": random.uniform(accuracy - 0.2, accuracy)
             })
         return returns
 
@@ -64,6 +77,33 @@ def classify_targets(fused: List[Dict]) -> List[Dict]:
     for obj in fused:
         obj["classification"] = obj.get("type", "unknown")
     return fused
+
+def check_line_of_sight(obs_pos: Dict, tar_pos: Dict) -> bool:
+    """
+    Menghitung intersec 3D antara garis pandang dan rintangan gunung.
+    """
+    A = tar_pos['x'] - obs_pos['x']
+    B = tar_pos['z'] - obs_pos['z']
+    C = MOUNTAIN_CONFIG['x'] - obs_pos['x']
+    D = MOUNTAIN_CONFIG['z'] - obs_pos['z']
+
+    len_sq = A**2 + B**2
+    param = (A * C + B * D) / len_sq if len_sq != 0 else -1
+
+    if param < 0: xx, zz = obs_pos['x'], obs_pos['z']
+    elif param > 1: xx, zz = tar_pos['x'], tar_pos['z']
+    else:
+        xx = obs_pos['x'] + param * A
+        zz = obs_pos['z'] + param * B
+
+    dist_to_mtn = math.sqrt((MOUNTAIN_CONFIG['x'] - xx)**2 + (MOUNTAIN_CONFIG['z'] - zz)**2)
+    if dist_to_mtn < MOUNTAIN_CONFIG['radius']:
+        dist_obs_to_mtn = math.sqrt(C**2 + D**2)
+        dist_obs_to_tar = math.sqrt(len_sq)
+        if dist_obs_to_tar > dist_obs_to_mtn:
+            los_h = obs_pos['y'] + (tar_pos['y'] - obs_pos['y']) * (dist_obs_to_mtn / dist_obs_to_tar)
+            if los_h < MOUNTAIN_CONFIG['height']: return False
+    return True
 
 # --- KONFIGURASI MCDM (Multi-Criteria Decision Making) ---
 W_DISTANCE = 0.4
