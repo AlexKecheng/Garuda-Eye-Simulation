@@ -1784,8 +1784,10 @@ function startSimulation() {
     setupControls();
     updateAmmoUI();
 
-    document.getElementById('recText').innerHTML = "MENGINISIALISASI SISTEM...";
-    document.getElementById('recText').style.color = "#03dac6"; // Cyan agar terlihat aktif
+    const actionPanel = document.getElementById('actionPanel');
+    if (actionPanel) {
+        actionPanel.innerHTML = `<div class="action-card" style="grid-column: span 2; text-align: center; color: #03dac6;">MENGINISIALISASI SISTEM TAKTIS...</div>`;
+    }
 
     loadModels().then(() => {
         console.log("Sistem Siap. Menggunakan model 3D atau fallback geometri.");
@@ -1799,7 +1801,9 @@ function startSimulation() {
         // Pastikan modal tertutup saat start awal
         document.getElementById('gameOverModal').style.display = 'none';
     }).catch(error => {
-        document.getElementById('recText').innerHTML = `<span style="color: #cf6679;">GAGAL MEMUAT MODEL 3D.<br>Pastikan folder 'models' beserta isinya telah diunggah ke repository.</span>`;
+        if (actionPanel) {
+            actionPanel.innerHTML = `<div class="action-card" style="grid-column: span 2; text-align: center; color: #cf6679;">GAGAL MEMUAT MODEL 3D.<br>Pastikan folder 'models' telah diunggah ke repository.</div>`;
+        }
     });
 }
 
