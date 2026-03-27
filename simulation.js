@@ -226,8 +226,8 @@ function initTacticalMap() {
 
     // 3. Inisialisasi Peta (Center di Magelang/Akmil)
     tacticalMap = L.map('map', {
-        center: [-7.4917, 110.2139],
-        zoom: 13,
+        center: [-0.8492, 116.7025], // Titik Nol IKN Nusantara
+        zoom: 12,
         layers: [esriSatelit] // Default pakai Esri Satelit
     });
 
@@ -812,9 +812,22 @@ function initialize3DScene() {
     // --- GELAR LINGKAR ARHANUD IKN ---
     createDefenseLayout(); // Panggil fungsi baru untuk membuat layout awal
 
-    // Ground Plane / Grid
-    // Grid diperluas untuk mencakup area spawn yang jauh (200km)
-    const gridHelper = new THREE.GridHelper(RADAR_RANGE * SCENE_SCALE * 10, 100);
+    // 1. Ganti Grid dengan Ground Plane Berwarna Medan (Tactical Landscape)
+    const groundSize = RADAR_RANGE * SCENE_SCALE * 20;
+    const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
+    const groundMat = new THREE.MeshPhongMaterial({
+        color: 0x1a2b1a, // Hijau hutan gelap (Khas Kalimantan)
+        side: THREE.DoubleSide
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.5;
+    scene.add(ground);
+
+    // 2. Tetap tambahkan grid tipis di atas ground untuk referensi jarak
+    const gridHelper = new THREE.GridHelper(groundSize, 100, 0x00ff41, 0x222222);
+    gridHelper.material.opacity = 0.2;
+    gridHelper.material.transparent = true;
     scene.add(gridHelper);
 
     // Zona Kritis
