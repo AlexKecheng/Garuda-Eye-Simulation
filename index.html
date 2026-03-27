@@ -6,6 +6,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Pertahanan Udara - Garuda Eye</title>
+    <!-- Leaflet CSS for 2D Tactical Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body {
             margin: 0;
@@ -23,6 +25,18 @@
             width: 100%;
             height: 100%;
             z-index: 1;
+        }
+
+        /* 2D Tactical Map Overlay */
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            display: none;
+            /* Hidden by default, toggled by JS */
         }
 
         /* UI Overlay Layer */
@@ -348,6 +362,10 @@
                 <button id="monteCarloButton" style="background:#bb86fc; color:#000; margin-top:10px;">📊 ANALISIS MONTE
                     CARLO (1000x)</button>
                 <div style="margin-top: 20px;"></div>
+                <h2>Navigasi Visual</h2>
+                <button id="toggleViewButton" style="background:#03dac6; color:#000;">🛰️ MODE PETA TAKTIS (2D)</button>
+
+                <div style="margin-top: 15px;"></div>
                 <button id="swarmButton" style="background:#ff9800;">⚠️ SIMULASI SWARM ATTACK</button>
                 <button id="reportButton" style="background:#2196F3; color:white;">ANALISIS TAKTIS (AAR)</button>
                 <button id="resetButton" style="background:#444; color:#fff; margin-top:5px;">RESET SYSTEM</button>
@@ -382,6 +400,8 @@
         <div id="actionPanel">
             <div class="action-card" style="grid-column: span 2; text-align: center;">MEMUAT SISTEM TAKTIS...</div>
         </div>
+        <!-- 2D Map Container -->
+        <div id="map"></div>
     </div>
 
     <!-- Modal Laporan AAR -->
@@ -430,6 +450,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- OrbitControls for camera movement -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Leaflet JS for 2D Map -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- GLTFLoader for loading 3D models -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <!-- Main Logic -->

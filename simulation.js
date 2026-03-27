@@ -207,6 +207,39 @@ function getBearingAndDistance(lat1, lon1, lat2, lon2) {
 }
 
 /**
+ * MODUL 6: TACTICAL MAP ENGINE (2D)
+ * Implementasi Esri World Imagery & Layer Control (Battle-Ready)
+ */
+let tacticalMap = null;
+let is2DMode = false;
+
+function initTacticalMap() {
+    // 1. Peta Standar (Cadangan - Pasti Jalan)
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    });
+
+    // 2. Peta Satelit Esri (Legal & Stabil - Tanpa API Key)
+    const esriSatelit = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
+    });
+
+    // 3. Inisialisasi Peta (Center di Magelang/Akmil)
+    tacticalMap = L.map('map', {
+        center: [-7.4917, 110.2139],
+        zoom: 13,
+        layers: [esriSatelit] // Default pakai Esri Satelit
+    });
+
+    // 4. KUNCI KEAMANAN: Kontrol Layer
+    const baseMaps = {
+        "Citra Satelit (Esri)": esriSatelit,
+        "Peta Standar (OSM)": osm
+    };
+    L.control.layers(baseMaps).addTo(tacticalMap);
+}
+
+/**
  * Algoritma 3D Line of Sight (LoS)
  * Memeriksa apakah garis antara observer dan target terhalang oleh rintangan medan (Gunung).
  */
@@ -1786,6 +1819,7 @@ function animate() {
 // Jalankan
 function startSimulation() {
     initialize3DScene();
+    initTacticalMap();
     setupControls();
     updateAmmoUI();
 
