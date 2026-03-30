@@ -54,6 +54,12 @@ const SCENE_SCALE = 1 / 100; // Skala dunia 3D (1m di dunia nyata = 0.01 unit di
 const RADAR_EW_RANGE = 150000; // 150 km (Early Warning AU)
 const RADAR_KRI_RANGE = 80000;  // 80 km (Radar KRI AL)
 const RADAR_LOCAL_RANGE = 25000; // 25 km (Radar Dalpur/Dalbak Arhanud)
+const RADAR_RANGE = 40000; // Jangkauan Taktis Standar (Referensi Global)
+
+// --- POSISI ASET EKSTERNAL (Integrasi K4IPP) ---
+const KRI_AL_POS = { x: -60000, z: -40000 };
+const EW_RADAR_POS = { x: 50000, z: -70000 };
+
 const VISUAL_RANGE = 15000; // 15 km (Untuk fusi data, tidak mempengaruhi deteksi)
 let DEFENSE_RADIUS = 5000; // 5 km dari pusat untuk penempatan radar/rudal (diubah ke let)
 const CRITICAL_RANGE = 5000; // 5 km (Game Over)
@@ -146,7 +152,8 @@ const WEIGHTS = {
     TTI: 0.45,       // Urgensi (Waktu menuju benturan)
     STRATEGIC: 0.30, // Nilai Strategis (Tipe sasaran)
     DIRECTNESS: 0.10,// Arah serangan (Radial vs Tangensial)
-    CONFIDENCE: 0.15 // Faktor Keyakinan Data
+    CONFIDENCE: 0.10, // Faktor Keyakinan Data
+    PK_AVAIL: 0.05    // Ketersediaan Senjata
 };
 const MAX_SPEED_REF = 1000; // m/s
 const MAX_TTI_REF = 300;    // 5 Menit (Window penilaian urgensi)
@@ -1644,12 +1651,12 @@ function executeFireLogic(targetToEngage, weapon) {
     updateAmmoUI();
     missionStats.shots++;
 
-    // --- SIMPAN DATA UNTUK BAHAN DEBAT (AAR) ---
+    // --- SIMPAN DATA UNTUK BAHAN EVALUASI (AAR) ---
     const rcsVal = RCS_MAP[targetToEngage.classification] || 2;
-    const s_dist = ((RADAR_RANGE - targetToEngage.distance) / RADAR_RANGE).toFixed(2);
+    const s_dist = ((RADAR_LOCAL_RANGE - targetToEngage.distance) / RADAR_LOCAL_RANGE).toFixed(2);
     const s_speed = (Math.max(0, targetToEngage.closingSpeed || 0) / MAX_SPEED_REF).toFixed(2);
 
-    let justification = `Dist(${s_dist}*${WEIGHTS.DIST}) + Speed(${s_speed}*${WEIGHTS.SPEED}) + RCS(${rcsVal}/10*${WEIGHTS.RCS})`;
+    let justification = `TTI(${s_dist}*${WEIGHTS.TTI}) + Strategic(${rcsVal}/10*${WEIGHTS.STRATEGIC})`;
     if (targetToEngage.distance < CRITICAL_RANGE) justification += ` + CRITICAL_BOOST(100)`;
 
     const isOverkill = targetToEngage.weaponRec.includes("MERIAM") && weapon !== "Oerlikon";
