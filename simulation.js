@@ -601,18 +601,18 @@ function processData(camera, radar) {
         const s_direct = obj.speed > 0 ? Math.max(0, (obj.closingSpeed || 0) / obj.speed) : 0;
 
         // 4. Engageability (Pk & Ammo Check)
-        let maxAvailablePk = 0;
-        for (const [wName, wSpecs] of Object.entries(WEAPON_SPECS)) {
-            if (obj.distance <= wSpecs.maxRange && currentAmmo[wName] > 0 && !reloadingStatus[wName]) {
-                maxAvailablePk = Math.max(maxAvailablePk, wSpecs.pk / 100);
-            }
-        }
-        const s_pkAvail = maxAvailablePk;
+        let s_pkAvail = 0;
+        Object.values(WEAPON_SPECS).forEach(spec => {
+            if (obj.distance <= spec.maxRange) s_pkAvail = Math.max(s_pkAvail, spec.pk / 100);
+        });
+
+        const s_confidence = obj.source === "FUSED" ? 1.0 : 0.6;
 
         const total = (s_tti * WEIGHTS.TTI) +
             (s_strategic * WEIGHTS.STRATEGIC) +
             (s_direct * WEIGHTS.DIRECTNESS) +
-            (s_pkAvail * WEIGHTS.PK_AVAIL);
+            (s_pkAvail * WEIGHTS.PK_AVAIL) +
+            (s_confidence * WEIGHTS.CONFIDENCE);
 
         obj.score = Math.round(total * 100);
         if (obj.distance < CRITICAL_RANGE) obj.score += 100;
@@ -1520,6 +1520,29 @@ function setupControls() {
             link.href = url;
             link.download = `AAR_Simulasi_Taktik_Arhanud_Gelar_Lingkar.csv`;
             link.click();
+        });
+    }
+
+    // --- LOGIKA TOGGLE PETA 2D (LEAFLET) ---
+    const toggleViewBtn = document.getElementById('toggleViewButton');
+    if (toggleViewBtn) {
+        toggleViewBtn.addEventListener('click', () => {
+            is2DMode = !is2DMode;
+            const canvas = document.getElementById('sceneCanvas');
+            const mapDiv = document.getElementById('map');
+
+            if (is2DMode) {
+                // Sembunyikan 3D, Tampilkan 2D
+                canvas.style.display = 'none';
+                mapDiv.style.display = 'block';
+                toggleViewBtn.textContent = "🛰️ MODE ENGAGEMENT (3D)";
+                if (tacticalMap) tacticalMap.invalidateSize(); // Refresh peta agar tidak abu-abu
+            } else {
+                // Tampilkan 3D, Sembunyikan 2D
+                canvas.style.display = 'block';
+                mapDiv.style.display = 'none';
+                toggleViewBtn.textContent = "🛰️ MODE PETA TAKTIS (2D)";
+            }
         });
     }
 
