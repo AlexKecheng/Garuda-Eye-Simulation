@@ -54,7 +54,7 @@ const SCENE_SCALE = 1 / 100; // Skala dunia 3D (1m di dunia nyata = 0.01 unit di
 const RADAR_EW_RANGE = 150000; // 150 km (Early Warning AU)
 const RADAR_KRI_RANGE = 80000;  // 80 km (Radar KRI AL)
 const RADAR_LOCAL_RANGE = 25000; // 25 km (Radar Dalpur/Dalbak Arhanud)
-const RADAR_RANGE = 40000; // Jangkauan Taktis Standar (Referensi Global)
+const RADAR_RANGE = 40000; // Variabel Utama untuk Luas Medan (Ground Plane)
 
 // --- POSISI ASET EKSTERNAL (Integrasi K4IPP) ---
 const KRI_AL_POS = { x: -60000, z: -40000 };
@@ -502,8 +502,8 @@ function generateSensorData() {
                 speed: t.speed,
                 closingSpeed: closingSpeed, // Data baru: Kecepatan radial
                 trueId: t.id,
-                source: source,
-                mode: transmissionMode
+                source: "RADAR_PRIMARY",
+                mode: "ACTIVE_SCAN"
             });
         }
 
