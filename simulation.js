@@ -249,7 +249,7 @@ function initTacticalMap() {
     tacticalMap = L.map('map', {
         center: [-0.8492, 116.7025],
         zoom: 12,
-        layers: [petaSatelit] // Set default tampilan awal ke Satelit
+        layers: [petaJalan] // Set default tampilan awal ke OpenStreetMap (Peta Jalan)
     });
 
     // 4. Masukkan ke dalam Kontrol Layer agar bisa berganti tampilan
