@@ -228,6 +228,12 @@ let tacticalMap = null;
 let is2DMode = false;
 
 function initTacticalMap() {
+    // Fail-safe: Cek apakah library Leaflet (L) tersedia
+    if (typeof L === 'undefined') {
+        console.error("Tactical Map: Library Leaflet tidak ditemukan. Mode 2D dinonaktifkan.");
+        return;
+    }
+
     // 1. Definisikan Peta Standar (OSM)
     const petaJalan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'

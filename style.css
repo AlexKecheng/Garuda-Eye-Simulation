@@ -39,6 +39,11 @@ h1 {
     animation: blink 2s infinite;
 }
 
+/* Tactical Map Container Height */
+#map {
+    height: 100%;
+}
+
 /* --- CONTAINER UTAMA --- */
 .container {
     display: flex;
