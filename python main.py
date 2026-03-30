@@ -16,10 +16,25 @@ MOUNTAIN_CONFIG = {
     "height": 5000
 }
 
-class SensorSimulator:
+class K4IPPEngine:
     def __init__(self):
-        # daftar tipe objek yang bisa “dikecam”
-        self.objects = ["drone", "helicopter", "airplane", "missile"]
+        self.objects = ["fixed-wing", "rotary-wing", "PTTA", "SSM", "AGM", "RAM", "EWC"]
+        self.network_status = "ONLINE"
+        # Inisialisasi 4 Kapal KRI untuk Patroli (Poin 10.1 Juknis)
+        self.kri_assets = [
+            {"id": "KRI-01", "angle": 0, "radius": 80000, "range": 70000},
+            {"id": "KRI-02", "angle": 90, "radius": 85000, "range": 70000},
+            {"id": "KRI-03", "angle": 180, "radius": 90000, "range": 70000},
+            {"id": "KRI-04", "angle": 270, "radius": 82000, "range": 70000}
+        ]
+
+    def move_kri_patrol(self, speed_deg: float = 0.5):
+        """Membuat kapal bergerak berkeliling area perairan."""
+        for kri in self.kri_assets:
+            kri["angle"] = (kri["angle"] + speed_deg) % 360
+            # Update koordinat kartesius berdasarkan sudut patroli
+            kri["x"] = math.cos(math.radians(kri["angle"])) * kri["radius"]
+            kri["z"] = math.sin(math.radians(kri["angle"])) * kri["radius"]
 
     def get_camera_data(self) -> List[Dict]:
         """
@@ -125,25 +140,24 @@ RCS_VALUES = {
 
 def prioritize_targets(classified: List[Dict]) -> List[Dict]:
     """
-    Implementasi Algoritma MCDM untuk Prioritas Sasaran.
+    Implementasi MCDM berdasarkan Pokok Pertimbangan:
+    Kekritisan, Kerawanan, Pemulihan, Mobilitas (Poin 2.a.1)
     """
     for obj in classified:
         dist = obj.get("distance", MAX_RANGE)
         speed = random.uniform(100, 400) # Simulasi speed jika tidak ada di data
-        angle = obj.get("angle", 45)     # Simulasi aspect angle
+        azimuth = obj.get("angle", 45)
+        altitude = obj.get("altitude", 5000)
         rcs = RCS_VALUES.get(obj["classification"], 2)
 
-        # 1. Normalisasi Parameter (0.0 - 1.0)
-        score_dist = (MAX_RANGE - min(dist, MAX_RANGE)) / MAX_RANGE
-        score_speed = min(speed, MAX_SPEED) / MAX_SPEED
-        score_angle = math.cos(math.radians(angle))
-        score_rcs = rcs / MAX_RCS
+        # Sesuai Poin 10.(3): Data diolah menjadi Berita Sasaran (Brasas)
+        criticality = (MAX_RANGE - min(dist, MAX_RANGE)) / MAX_RANGE # Kekritisan
+        vulnerability = rcs / MAX_RCS # Kerawanan
+        recovery = 0.5 # Default heuristic
+        mobility = speed / MAX_SPEED
 
-        # 2. Total Skor Berbobot
-        total_score = (score_dist * W_DISTANCE) + \
-                      (score_speed * W_SPEED) + \
-                      (score_angle * W_ANGLE) + \
-                      (score_rcs * W_RCS)
+        total_score = (criticality * 0.4) + (vulnerability * 0.25) + \
+                      (recovery * 0.15) + (mobility * 0.2)
         
         obj["score"] = round(total_score * 100, 1) # Skala 0-100
     return sorted(classified, key=lambda x: x["score"], reverse=True)
@@ -304,9 +318,10 @@ def run_cycle(sim, aar):
     print("Recommendation:  ", recommendation)
 
 def main():
-    sim = SensorSimulator()
+    sim = K4IPPEngine() # Memperbaiki referensi class
     aar = AAREngine()
     for _ in range(5):
+        sim.move_kri_patrol() # Jalankan pergerakan kapal setiap siklus
         run_cycle(sim, aar)
     aar.generate_report()
 

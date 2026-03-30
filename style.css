@@ -11,12 +11,32 @@ body {
     /* Mencegah scroll seluruh halaman */
 }
 
+.main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    border-bottom: 2px solid #333;
+    margin-bottom: 10px;
+}
+
 h1 {
     color: #03dac6;
     margin: 5px 0;
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     text-transform: uppercase;
-    letter-spacing: 2px;
+}
+
+#k4ipp-status {
+    display: flex;
+    gap: 15px;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+.status-indicator {
+    color: #81c784;
+    animation: blink 2s infinite;
 }
 
 /* --- CONTAINER UTAMA --- */

@@ -1,8 +1,10 @@
 /*
 ================================================================================
-ASPEK DOKUMENTASI & PENYAJIAN
+JUDUL TUGAS AKHIR:
+Rancang Bangun Sistem Simulasi Taktik Integrasi Arhanud Berbasis Python pada 
+Taktik Integrasi Satuan Arhanud dalam Opsratgab/Opshanudnas Guna Mendukung 
+Pengambilan Keputusan Dandahanud Melalui Sistem K4IPP
 ================================================================================
-
 I. PEMISAHAN KOMPONEN
 
 A. Komponen Hardware (Prototipe yang Disimulasikan):
@@ -43,13 +45,15 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
 */
 
 // --- KONFIGURASI SIMULASI (Sama dengan Python) ---
-const OBJECT_TYPES = ["drone", "helicopter", "airplane", "missile"];
+const OBJECT_TYPES = ["PTTA", "rotary-wing", "fixed-wing", "SSM", "AGM", "RAM", "EWC"];
 const THREAT_SCORES = {
-    "missile": 100, "airplane": 80, "helicopter": 60, "drone": 40, "unknown": 10
+    "SSM": 100, "fixed-wing": 80, "rotary-wing": 60, "PTTA": 40, "RAM": 70, "EWC": 90, "unknown": 10
 };
 // Jarak ditingkatkan agar lebih realistis untuk skala tempur udara
 const SCENE_SCALE = 1 / 100; // Skala dunia 3D (1m di dunia nyata = 0.01 unit di 3D)
-const RADAR_RANGE = 20000; // 20 km
+const RADAR_EW_RANGE = 150000; // 150 km (Early Warning AU)
+const RADAR_KRI_RANGE = 80000;  // 80 km (Radar KRI AL)
+const RADAR_LOCAL_RANGE = 25000; // 25 km (Radar Dalpur/Dalbak Arhanud)
 const VISUAL_RANGE = 15000; // 15 km (Untuk fusi data, tidak mempengaruhi deteksi)
 let DEFENSE_RADIUS = 5000; // 5 km dari pusat untuk penempatan radar/rudal (diubah ke let)
 const CRITICAL_RANGE = 5000; // 5 km (Game Over)
@@ -127,7 +131,7 @@ let realTargets = [];  // Ground Truth (Posisi asli objek di dunia nyata)
 const mapCenter = [-7.25, 110.4]; // Konseptual, tidak lagi dipakai untuk render
 let currentAmmo = { "NASAMS": 6, "VL MICA": 8, "Starstreak": 12, "Oerlikon": 100 };
 let reloadingStatus = { "NASAMS": false, "VL MICA": false, "Starstreak": false, "Oerlikon": false };
-let radarActive = [true, true, true]; // Status aktif/mati 3 radar
+let radarActive = [true, true, true, true, true, true]; // 6 Unit Arhanud
 let selectedTargetId = null; // ID target yang dipilih manual
 let missionStats = { kills: 0, shots: 0, costSaved: 0, leaked: 0 };
 let engagementHistory = []; // Untuk menyimpan data debat/AAR
@@ -214,27 +218,28 @@ let tacticalMap = null;
 let is2DMode = false;
 
 function initTacticalMap() {
-    // 1. Peta Standar (Cadangan - Pasti Jalan)
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // 1. Definisikan Peta Standar (OSM)
+    const petaJalan = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
     });
 
-    // 2. Peta Satelit Esri (Legal & Stabil - Tanpa API Key)
-    const esriSatelit = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community'
+    // 2. Definisikan Esri Satelit (Profesional)
+    const petaSatelit = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community',
+        maxZoom: 18
     });
 
-    // 3. Inisialisasi Peta (Center di Magelang/Akmil)
+    // 3. Inisialisasi Peta (Center di Titik Nol IKN Nusantara)
     tacticalMap = L.map('map', {
-        center: [-0.8492, 116.7025], // Titik Nol IKN Nusantara
+        center: [-0.8492, 116.7025],
         zoom: 12,
-        layers: [esriSatelit] // Default pakai Esri Satelit
+        layers: [petaSatelit] // Set default tampilan awal ke Satelit
     });
 
-    // 4. KUNCI KEAMANAN: Kontrol Layer
+    // 4. Masukkan ke dalam Kontrol Layer agar bisa berganti tampilan
     const baseMaps = {
-        "Citra Satelit (Esri)": esriSatelit,
-        "Peta Standar (OSM)": osm
+        "Peta Satelit (Profesional)": petaSatelit,
+        "Peta Jalan (Standar)": petaJalan
     };
     L.control.layers(baseMaps).addTo(tacticalMap);
 }
@@ -485,10 +490,13 @@ function generateSensorData() {
 
             radar.push({
                 distance: noisyDist,
-                angle: noisyAngle,
+                angle: noisyAngle, // Azimut
+                altitude: t.y,     // Ketinggian
                 speed: t.speed,
                 closingSpeed: closingSpeed, // Data baru: Kecepatan radial
-                trueId: t.id
+                trueId: t.id,
+                source: source,
+                mode: transmissionMode
             });
         }
 
@@ -882,12 +890,13 @@ function createDefenseLayout() {
         scene.add(iknMesh);
     }
 
-    // 2. Satuan Tembak (3 Rudal & 3 Radar) Mengelilingi IKN
-    for (let i = 0; i < 3; i++) {
-        const angleDeg = i * 120;
+    // 2. Satuan Tembak (6 Unit: 3 Rudal, 3 Meriam) Gelar Lingkar
+    for (let i = 0; i < 6; i++) {
+        const angleDeg = i * 60; // 360 / 6 = 60 derajat antar unit
         const angleRad = angleDeg * (Math.PI / 180);
         const x = Math.cos(angleRad) * defenseRadScaled;
         const z = Math.sin(angleRad) * defenseRadScaled;
+        const isRudal = i % 2 === 0; // Bergantian Rudal - Meriam
 
         // Simpan posisi dunia launcher (x, 3, z) -> 3 adalah tinggi launcher
         launcherPositions.push(new THREE.Vector3(x, 3, z));
@@ -932,6 +941,49 @@ function createDefenseLayout() {
         defenseSiteMeshes.push(ring); // Tambahkan ke daftar untuk dihapus nanti
         radarRings.push(ring); // Simpan referensi
     }
+
+    // 3. Visualisasi Aset Eksternal (Integrasi)
+    createExternalAssets();
+}
+
+function createExternalAssets() {
+    // --- VISUAL KRI (AL) ---
+    const shipGroup = new THREE.Group();
+    shipGroup.position.set(KRI_AL_POS.x * SCENE_SCALE, 0, KRI_AL_POS.z * SCENE_SCALE);
+
+    const hullGeo = new THREE.BoxGeometry(100 * SCENE_SCALE * 10, 40 * SCENE_SCALE * 10, 300 * SCENE_SCALE * 10);
+    const shipMat = new THREE.MeshPhongMaterial({ color: 0x78909c }); // Grey Navy
+    const hull = new THREE.Mesh(hullGeo, shipMat);
+    hull.position.y = 10 * SCENE_SCALE * 10;
+    shipGroup.add(hull);
+
+    const bridgeGeo = new THREE.BoxGeometry(60 * SCENE_SCALE * 10, 80 * SCENE_SCALE * 10, 60 * SCENE_SCALE * 10);
+    const bridge = new THREE.Mesh(bridgeGeo, shipMat);
+    bridge.position.y = 50 * SCENE_SCALE * 10;
+    shipGroup.add(bridge);
+
+    scene.add(shipGroup);
+    defenseSiteMeshes.push(shipGroup);
+
+    // --- VISUAL TOWER RADAR EW / SIPIL ---
+    const towerGroup = new THREE.Group();
+    towerGroup.position.set(EW_RADAR_POS.x * SCENE_SCALE, 0, EW_RADAR_POS.z * SCENE_SCALE);
+
+    const poleGeo = new THREE.CylinderGeometry(10, 20, 200 * SCENE_SCALE * 10, 8);
+    const towerMat = new THREE.MeshPhongMaterial({ color: 0xe0e0e0 });
+    const pole = new THREE.Mesh(poleGeo, towerMat);
+    pole.position.y = 100 * SCENE_SCALE * 10;
+    towerGroup.add(pole);
+
+    const dishGeo = new THREE.SphereGeometry(40 * SCENE_SCALE * 10, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const dish = new THREE.Mesh(dishGeo, new THREE.MeshPhongMaterial({ color: 0x03dac6, side: THREE.DoubleSide }));
+    dish.position.y = 210 * SCENE_SCALE * 10;
+    dish.rotation.x = Math.PI / 4;
+    towerGroup.add(dish);
+    radarMeshes.push(dish); // Biar ikut berputar
+
+    scene.add(towerGroup);
+    defenseSiteMeshes.push(towerGroup);
 }
 
 function updateWeaponZones() {
@@ -1213,7 +1265,7 @@ function updateUI(prioritized) {
 
         row.innerHTML = `
                     <td>${t.classification.toUpperCase()}</td>
-                    <td>${distStr}</td>
+                    <td style="font-size: 0.75em; color: #03dac6;">${t.source}</td>
                     <td class="${scoreClass}">${t.score}</td>
                     <td style="color: ${statusColor}; font-weight: bold;">${statusIndicator}</td>
                     <td style="color: #bb86fc; font-size: 0.85em;"><b>${t.weaponRec}</b></td>
@@ -1450,7 +1502,7 @@ function setupControls() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = `AAR_GarudaEye.csv`;
+            link.download = `AAR_Simulasi_Taktik_Arhanud_Gelar_Lingkar.csv`;
             link.click();
         });
     }
