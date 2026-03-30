@@ -54,7 +54,7 @@ const SCENE_SCALE = 1 / 100; // Skala dunia 3D (1m di dunia nyata = 0.01 unit di
 const RADAR_EW_RANGE = 150000; // 150 km (Early Warning AU)
 const RADAR_KRI_RANGE = 80000;  // 80 km (Radar KRI AL)
 const RADAR_LOCAL_RANGE = 25000; // 25 km (Radar Dalpur/Dalbak Arhanud)
-const RADAR_RANGE = 40000; // Variabel Utama untuk Luas Medan (Ground Plane)
+const RADAR_RANGE = 40000; // DEFINISI KRITIS: Jangan dihapus atau dipindah
 
 // --- POSISI ASET EKSTERNAL (Integrasi K4IPP) ---
 const KRI_AL_POS = { x: -60000, z: -40000 };
@@ -178,11 +178,14 @@ let activeInterceptors = []; // Daftar rudal pertahanan yang sedang terbang
 let loader; // Inisialisasi nanti di startSimulation
 const loadedModels = {}; // Cache untuk model yang sudah di-load
 const modelPaths = {
-    "airplane": "models/airplane.glb",
-    "helicopter": "models/helicopter.glb",
-    "missile": "models/missile.glb",
-    "drone": "models/drone.glb",
-    "unknown": "models/unknown.glb" // Model fallback
+    "fixed-wing": "models/airplane.glb",
+    "rotary-wing": "models/helicopter.glb",
+    "SSM": "models/missile.glb",
+    "AGM": "models/missile.glb",
+    "RAM": "models/missile.glb",
+    "PTTA": "models/drone.glb",
+    "EWC": "models/airplane.glb",
+    "unknown": "models/unknown.glb"
 };
 
 // --- LOGIKA SIMULASI ---
@@ -1716,10 +1719,10 @@ function loadModels() {
     const promises = Object.entries(modelPaths).map(([type, path]) => {
         return new Promise((resolve, reject) => {
             loader.load(path, (gltf) => {
-                // Atur skala dasar model saat pertama kali dimuat
-                if (type === 'airplane') gltf.scene.scale.set(15, 15, 15);
-                else if (type === 'missile') gltf.scene.scale.set(8, 8, 8);
-                else if (type === 'helicopter') gltf.scene.scale.set(12, 12, 12);
+                // Scaling berdasarkan tipe yang sudah disesuaikan
+                if (type === 'fixed-wing' || type === 'EWC') gltf.scene.scale.set(15, 15, 15);
+                else if (['SSM', 'AGM', 'RAM'].includes(type)) gltf.scene.scale.set(8, 8, 8);
+                else if (type === 'rotary-wing') gltf.scene.scale.set(12, 12, 12);
                 else gltf.scene.scale.set(5, 5, 5);
 
                 loadedModels[type] = gltf.scene;
@@ -1890,10 +1893,12 @@ function animate() {
 
 // Jalankan
 function startSimulation() {
-    initialize3DScene();
+    // Peta 2D dimuat pertama agar UI segera responsif
     initTacticalMap();
     setupControls();
     updateAmmoUI();
+
+    initialize3DScene();
 
     const actionPanel = document.getElementById('actionPanel');
     if (actionPanel) {
