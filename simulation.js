@@ -55,6 +55,8 @@ const RADAR_EW_RANGE = 150000; // 150 km (Early Warning AU)
 const RADAR_KRI_RANGE = 80000;  // 80 km (Radar KRI AL)
 const RADAR_LOCAL_RANGE = 25000; // 25 km (Radar Dalpur/Dalbak Arhanud)
 const RADAR_RANGE = 40000; // DEFINISI KRITIS: Jangan dihapus atau dipindah
+const RADAR_RANGE = 40000; // Jangkauan Radar Standar
+const RADAR_LOCAL_RANGE = 25000;
 
 // --- POSISI ASET EKSTERNAL (Integrasi K4IPP) ---
 const KRI_AL_POS = { x: -60000, z: -40000 };
@@ -1290,6 +1292,7 @@ function updateUI(prioritized) {
     });
 
     const actionPanel = document.getElementById('actionPanel');
+    const recText = document.getElementById('recText');
     const selectedTarget = prioritized.find(t => t.id === selectedTargetId);
     const topTarget = selectedTarget || prioritized[0];
 
@@ -1316,9 +1319,11 @@ function updateUI(prioritized) {
                 <div style="font-size: 0.8rem; color: #aaa;">Risiko Kebocoran: ${topTarget.score > 80 ? 'TINGGI' : 'RENDAH'}</div>
             </div>
         `;
+        recText.innerHTML = `REKOMENDASI: Tembak <b>${topTarget.classification.toUpperCase()}</b> (Skor: ${topTarget.score})`;
         fireButton.disabled = false;
     } else {
         actionPanel.innerHTML = `<div class="action-card" style="grid-column: span 2; text-align: center; color: #81c784;">SEKTOR AMAN - TIDAK ADA ANCAMAN AKTIF</div>`;
+        recText.textContent = "SEKTOR AMAN - TIDAK ADA ANCAMAN AKTIF";
         fireButton.disabled = true;
     }
 }
@@ -1935,6 +1940,7 @@ function startSimulation() {
     } else {
         console.error("KRITIS: Elemen 'actionPanel' tidak ditemukan! Pastikan Anda menggunakan index.html atau tambahkan <div id='actionPanel'></div>");
     }
+    document.getElementById('recText').innerHTML = "MENGINISIALISASI SISTEM...";
 
     loadModels().then(() => {
         console.log("Sistem Siap. Menggunakan model 3D atau fallback geometri.");
@@ -1942,6 +1948,7 @@ function startSimulation() {
         if (!USE_PYTHON_SERVER) {
             initRealWorld();
         }
+        initRealWorld();
         simIntervalId = setInterval(runSimulationCycle, SIM_TICK);
         animate(); // Mulai loop rendering visual
 
@@ -1951,6 +1958,7 @@ function startSimulation() {
         if (actionPanel) {
             actionPanel.innerHTML = `<div class="action-card" style="grid-column: span 2; text-align: center; color: #cf6679;">GAGAL MEMUAT MODEL 3D.<br>Pastikan folder 'models' telah diunggah ke repository.</div>`;
         }
+        document.getElementById('recText').innerHTML = "GAGAL MEMUAT MODEL.";
     });
 }
 

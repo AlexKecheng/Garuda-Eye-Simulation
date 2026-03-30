@@ -6,9 +6,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Pertahanan Udara - Garuda Eye</title>
-    <!-- Leaflet CSS for 2D Tactical Map -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <style>
         body {
             margin: 0;
@@ -27,19 +24,6 @@
             height: 100%;
             z-index: 1;
             background: #000;
-        }
-
-        /* 2D Tactical Map Overlay */
-        #map {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 5;
-            /* Pastikan lebih tinggi dari canvas saat muncul */
-            display: none;
-            background: #050814;
         }
 
         /* UI Overlay Layer */
@@ -64,9 +48,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #00ff41;
-            /* Tactical Green */
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
+            border-bottom: 2px solid #03dac6;
+            box-shadow: 0 0 15px rgba(3, 218, 198, 0.2);
             pointer-events: auto;
         }
 
@@ -74,7 +57,7 @@
             margin: 0;
             font-size: 1.2rem;
             letter-spacing: 2px;
-            color: #00ff41;
+            color: #03dac6;
             text-transform: uppercase;
         }
 
@@ -96,7 +79,7 @@
         .sidebar {
             width: 300px;
             background: rgba(5, 8, 20, 0.85);
-            border: 1px solid rgba(0, 255, 65, 0.3);
+            border: 1px solid rgba(3, 218, 198, 0.3);
             padding: 10px;
             box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
             display: flex;
@@ -138,7 +121,7 @@
         }
 
         th {
-            color: #00ff41;
+            color: #03dac6;
         }
 
         tr.selected-row {
@@ -153,7 +136,7 @@
 
         /* Buttons & Inputs */
         button {
-            background: #00ff41;
+            background: #03dac6;
             color: #000;
             border: none;
             padding: 8px 15px;
@@ -165,7 +148,7 @@
         }
 
         button:hover {
-            background: #00cc33;
+            background: #64ffda;
         }
 
         button:disabled {
@@ -211,7 +194,7 @@
             flex: 1;
             padding: 5px;
             font-size: 0.7rem;
-            background: #00ff41;
+            background: #03dac6;
             border: none;
             color: #000;
             cursor: pointer;
@@ -232,36 +215,14 @@
         }
 
         /* Notification Area */
-        #actionPanel {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            padding: 15px;
-            background: rgba(5, 8, 20, 0.95);
-            border-top: 2px solid #00ff41;
-            pointer-events: auto;
-        }
-
-        .action-card {
-            border: 1px solid #444;
+        #recText {
+            text-align: center;
             padding: 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .action-card:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .action-card.primary {
-            border-color: #cf6679;
-            background: rgba(207, 102, 121, 0.1);
-        }
-
-        .action-card.secondary {
-            border-color: #81c784;
-            background: rgba(129, 199, 132, 0.1);
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            font-size: 1rem;
+            border-top: 2px solid #03dac6;
+            pointer-events: auto;
         }
 
         /* Loading Overlay */
@@ -396,13 +357,8 @@
         </div>
 
         <!-- Bottom Notification -->
-        <div id="actionPanel">
-            <div class="action-card" style="grid-column: span 2; text-align: center;">MEMUAT SISTEM TAKTIS...</div>
-        </div>
+        <div id="recText">MENGINISIALISASI SISTEM...</div>
     </div>
-
-    <!-- 2D Map Container (Pindah ke luar uiLayer agar berdiri sendiri) -->
-    <div id="map"></div>
 
     <!-- Modal Laporan AAR -->
     <div id="aarModal"
@@ -450,9 +406,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- OrbitControls for camera movement -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <!-- Leaflet JS for 2D Map -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- GLTFLoader for loading 3D models -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <!-- Main Logic -->
