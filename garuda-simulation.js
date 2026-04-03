@@ -777,33 +777,6 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     }
 
     /**
-     * Visual placeholder untuk integrasi aset eksternal (sensor mitra, datalink, dll.).
-     * Objek ditambahkan ke defenseSiteMeshes agar ikut dibersihkan saat layout di-reset.
-     */
-    function createExternalAssets() {
-        const markerMat = new THREE.MeshPhongMaterial({
-            color: 0x81c784,
-            transparent: true,
-            opacity: 0.85
-        });
-        const dist = 12000 * SCENE_SCALE;
-        const positions = [
-            [dist, 4, 0],
-            [-dist, 4, 0],
-            [0, 4, dist],
-            [0, 4, -dist]
-        ];
-        positions.forEach((pos, i) => {
-            const geo = new THREE.CylinderGeometry(4, 4, 10, 16);
-            const mesh = new THREE.Mesh(geo, markerMat);
-            mesh.position.set(pos[0], pos[1], pos[2]);
-            mesh.name = `ExternalAsset_${i}`;
-            scene.add(mesh);
-            defenseSiteMeshes.push(mesh);
-        });
-    }
-
-    /**
      * Membersihkan layout pertahanan lama dan membuat yang baru berdasarkan DEFENSE_RADIUS.
      */
     function createDefenseLayout() {
@@ -888,10 +861,21 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             radarRings.push(ring); // Simpan referensi
         }
 
-        // 3. Visualisasi Aset Eksternal (Integrasi)
-        if (typeof createExternalAssets === 'function') {
-            createExternalAssets();
-        }
+        // 3. Visualisasi Aset Eksternal (Integrasi) — inline supaya tidak bergantung nama fungsi (hindari error cache)
+        const extMarkerMat = new THREE.MeshPhongMaterial({
+            color: 0x81c784,
+            transparent: true,
+            opacity: 0.85
+        });
+        const extDist = 12000 * SCENE_SCALE;
+        [[extDist, 4, 0], [-extDist, 4, 0], [0, 4, extDist], [0, 4, -extDist]].forEach((pos, i) => {
+            const extGeo = new THREE.CylinderGeometry(4, 4, 10, 16);
+            const extMesh = new THREE.Mesh(extGeo, extMarkerMat);
+            extMesh.position.set(pos[0], pos[1], pos[2]);
+            extMesh.name = `ExternalAsset_${i}`;
+            scene.add(extMesh);
+            defenseSiteMeshes.push(extMesh);
+        });
     }
 
     function updateWeaponZones() {
