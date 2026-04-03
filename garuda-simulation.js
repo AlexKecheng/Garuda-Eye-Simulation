@@ -103,8 +103,8 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     const WEATHER_MODIFIERS = { "Clear": 1.0, "Rain": 0.75, "Storm": 0.6 };
 
     // --- INTEGRASI SERVER ---
-    // false = simulasi penuh di browser (GitHub Pages / file:// tanpa Python). true = butuh server di SERVER_URL.
-    const USE_PYTHON_SERVER = false;
+    // Default: TIDAK fetch ke Python. Aktifkan dengan <script>window.GARUDA_PYTHON=true</script> SEBELUM skrip ini (dan jalankan server).
+    const USE_PYTHON_SERVER = typeof window !== 'undefined' && window.GARUDA_PYTHON === true;
     const SERVER_URL = "http://localhost:5000/api/data";
 
     // --- 3D SCENE STATE ---
@@ -235,6 +235,9 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
 
     // --- FUNGSI FETCH DATA SERVER ---
     async function fetchServerData() {
+        if (typeof window === 'undefined' || window.GARUDA_PYTHON !== true) {
+            return Promise.resolve();
+        }
         try {
             const response = await fetch(SERVER_URL);
             if (!response.ok) throw new Error("Gagal koneksi ke server");

@@ -427,8 +427,9 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <!-- Main Logic (?v= memaksa browser ambil file baru, hindari cache lama) -->
-    <script src="garuda-simulation.js?v=3"></script>
+    <!-- Simulasi browser-only. Untuk Python: set window.GARUDA_PYTHON=true di baris di bawah -->
+    <script>window.GARUDA_PYTHON = false;</script>
+    <script src="garuda-simulation.js?v=4"></script>
 </body>
 
 </html>
