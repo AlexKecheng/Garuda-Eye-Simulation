@@ -103,8 +103,9 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     const WEATHER_MODIFIERS = { "Clear": 1.0, "Rain": 0.75, "Storm": 0.6 };
 
     // --- INTEGRASI SERVER ---
-    const USE_PYTHON_SERVER = true; // Set ke true untuk mengambil data dari Python
-    const SERVER_URL = "http://localhost:5000/api/data"; // Sesuaikan dengan endpoint server Anda
+    // false = simulasi penuh di browser (GitHub Pages / file:// tanpa Python). true = butuh server di SERVER_URL.
+    const USE_PYTHON_SERVER = false;
+    const SERVER_URL = "http://localhost:5000/api/data";
 
     // --- 3D SCENE STATE ---
     let scene, camera, renderer, controls;
@@ -213,9 +214,12 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
         const dist = config.dist !== undefined ? config.dist : getRandomInt(RADAR_RANGE + 50000, RADAR_RANGE + 80000);
         const altitude = config.altitude !== undefined ? config.altitude : getRandomInt(1000, 8000);
 
+        const objectType = config.type !== undefined
+            ? config.type
+            : OBJECT_TYPES[getRandomInt(0, OBJECT_TYPES.length - 1)];
         realTargets.push({
             id: Math.random().toString(36).substr(2, 9),
-            type: OBJECT_TYPES[getRandomInt(0, OBJECT_TYPES.length - 1)],
+            type: objectType,
             // Posisi Kartesius 3D
             x: Math.cos(angleRad) * dist,
             y: altitude, // Ketinggian
@@ -273,7 +277,10 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             }
         } catch (error) {
             console.warn("Server Error:", error);
-            document.getElementById('recText').innerHTML = `<span style="color:#cf6679;">KONEKSI SERVER TERPUTUS</span>`;
+            const rec = document.getElementById('recText');
+            if (rec && USE_PYTHON_SERVER) {
+                rec.innerHTML = `<span style="color:#cf6679;">KONEKSI SERVER TERPUTUS</span>`;
+            }
         }
     }
 
@@ -282,7 +289,7 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
         const swarmSize = 8;
         for (let i = 0; i < swarmSize; i++) {
             spawnTarget({
-                type: 'drone',
+                type: 'PTTA',
                 angle: centerAngle + (Math.random() - 0.5) * 20, // Spread 20 derajat
                 dist: RADAR_RANGE + 40000 + (Math.random() * 5000), // Jarak bervariasi sedikit
                 altitude: 2000 + (Math.random() * 1000)
@@ -1037,17 +1044,27 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
 
             switch (target.type) {
                 case 'missile':
+                case 'SSM':
+                case 'AGM':
+                case 'RAM':
                     geometry = new THREE.ConeGeometry(5, 20, 8);
                     geometry.rotateX(Math.PI / 2); // Arahkan ke depan
                     color = 0xcf6679; // Merah
                     break;
                 case 'airplane':
+                case 'fixed-wing':
                     geometry = new THREE.BoxGeometry(20, 4, 15);
                     color = 0x00ff00; // Hijau
                     break;
                 case 'helicopter':
+                case 'rotary-wing':
                     geometry = new THREE.BoxGeometry(15, 8, 15);
                     color = 0xffff00; // Kuning
+                    break;
+                case 'PTTA':
+                case 'EWC':
+                    geometry = new THREE.SphereGeometry(6, 16, 16);
+                    color = 0x888888;
                     break;
                 default: // drone & unknown
                     geometry = new THREE.SphereGeometry(5, 16, 16);
@@ -1694,18 +1711,15 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     function runSimulationCycle() {
         if (isGameOver) return;
 
-        // 1. Update Fisika Dunia Nyata
+        const dt = SIM_TICK / 1000;
+
         if (USE_PYTHON_SERVER) {
-            // --- MODE SERVER ---
-            // Ambil data, lalu update visualisasi
             fetchServerData().then(() => {
                 drawTargetsInScene();
                 updateUI(systemTracks);
             });
         } else {
-            // --- MODE SIMULASI LOKAL (JS) ---
-            updatePhysics(SIM_TICK / 1000);
-            // 2. Sensor Membaca Dunia Nyata & Proses Data
+            updatePhysics(dt);
             const data = generateSensorData();
             systemTracks = processData(data.camera, data.radar);
             drawTargetsInScene();
