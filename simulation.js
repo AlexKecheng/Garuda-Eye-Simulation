@@ -889,7 +889,9 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
         }
 
         // 3. Visualisasi Aset Eksternal (Integrasi)
-        createExternalAssets();
+        if (typeof createExternalAssets === 'function') {
+            createExternalAssets();
+        }
     }
 
     function updateWeaponZones() {
