@@ -1199,11 +1199,28 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
 
     // --- KONTROL PENGGUNA ---
     /**
-     * Peta taktis 2D (Leaflet). Versi index.html hanya canvas 3D — tidak ada div#map / Leaflet.
-     * Referensi lengkap ada di simulation_web.html. Di sini no-op agar startSimulation tidak error.
+     * Peta taktis 2D (Leaflet). Butuh div#map + library L (Leaflet) di HTML.
+     * Tanpa itu, tacticalMap tetap null dan simulasi 3D tetap jalan.
      */
     function initTacticalMap() {
-        tacticalMap = null;
+        const mapEl = document.getElementById('map');
+        if (!mapEl || typeof L === 'undefined') {
+            tacticalMap = null;
+            return;
+        }
+        if (tacticalMap) {
+            tacticalMap.invalidateSize();
+            return;
+        }
+        // Leaflet butuh kontainer terlihat; jangan init saat display:none (ukuran 0×0).
+        if (typeof getComputedStyle === 'function' && getComputedStyle(mapEl).display === 'none') {
+            return;
+        }
+        tacticalMap = L.map('map', { zoomControl: true }).setView(mapCenter, 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(tacticalMap);
     }
 
     /**
@@ -1378,13 +1395,14 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
                 const mapDiv = document.getElementById('map');
 
                 if (is2DMode) {
-                    canvas.style.display = 'none';
-                    mapDiv.style.display = 'block';
+                    if (canvas) canvas.style.display = 'none';
+                    if (mapDiv) mapDiv.style.display = 'block';
                     viewBtn.textContent = "🛰️ MODE 3D";
-                    if (tacticalMap) tacticalMap.invalidateSize();
+                    if (typeof L !== 'undefined' && mapDiv && !tacticalMap) initTacticalMap();
+                    if (tacticalMap) setTimeout(() => tacticalMap.invalidateSize(), 50);
                 } else {
-                    canvas.style.display = 'block';
-                    mapDiv.style.display = 'none';
+                    if (canvas) canvas.style.display = 'block';
+                    if (mapDiv) mapDiv.style.display = 'none';
                     viewBtn.textContent = "🛰️ MODE PETA 2D";
                 }
             });
