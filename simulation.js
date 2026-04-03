@@ -116,6 +116,9 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     let launcherPositions = []; // Menyimpan posisi 3 launcher pertahanan
     let activeInterceptors = []; // Daftar rudal pertahanan yang sedang terbang
     let loader; // Inisialisasi nanti di startSimulation
+    /** Peta Leaflet opsional (mode 2D). Di index.html tidak dipakai — tetap null. */
+    let tacticalMap = null;
+    let is2DMode = false;
     const loadedModels = {}; // Cache untuk model yang sudah di-load
     const modelPaths = {
         "fixed-wing": "models/airplane.glb",
@@ -1195,6 +1198,14 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     }
 
     // --- KONTROL PENGGUNA ---
+    /**
+     * Peta taktis 2D (Leaflet). Versi index.html hanya canvas 3D — tidak ada div#map / Leaflet.
+     * Referensi lengkap ada di simulation_web.html. Di sini no-op agar startSimulation tidak error.
+     */
+    function initTacticalMap() {
+        tacticalMap = null;
+    }
+
     /**
      * Inisialisasi Kontrol Pengguna dengan Fail-Safe Pattern.
      * Mencegah error 'null' jika elemen HTML tidak ditemukan.
