@@ -1,4 +1,4 @@
-class EyeSimulation {
+export class EyeSimulation {
     private isRunning: boolean;
 
     constructor() {
@@ -23,6 +23,10 @@ class EyeSimulation {
         } else {
             console.log("Eye simulation is not running.");
         }
+    }
+
+    isSimulationRunning(): boolean {
+        return this.isRunning;
     }
 }
 

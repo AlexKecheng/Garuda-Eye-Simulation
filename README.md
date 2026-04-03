@@ -37,7 +37,7 @@ To run the simulation, execute the following command:
 npm start
 ```
 
-This will initialize the simulation and start the Garuda Eye system.
+This command builds the TypeScript sources and then runs the simulation entry point.
 
 ## Testing
 To run the unit tests for the EyeSimulation class, use the following command:

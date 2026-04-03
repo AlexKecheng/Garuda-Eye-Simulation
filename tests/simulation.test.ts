@@ -9,23 +9,23 @@ describe('EyeSimulation', () => {
 
     test('should start the simulation', () => {
         simulation.startSimulation();
-        expect(simulation.isRunning).toBe(true);
+        expect(simulation.isSimulationRunning()).toBe(true);
     });
 
     test('should stop the simulation', () => {
         simulation.startSimulation();
         simulation.stopSimulation();
-        expect(simulation.isRunning).toBe(false);
+        expect(simulation.isSimulationRunning()).toBe(false);
     });
 
     test('should not start the simulation if already running', () => {
         simulation.startSimulation();
         simulation.startSimulation();
-        expect(simulation.isRunning).toBe(true);
+        expect(simulation.isSimulationRunning()).toBe(true);
     });
 
     test('should not stop the simulation if not running', () => {
         simulation.stopSimulation();
-        expect(simulation.isRunning).toBe(false);
+        expect(simulation.isSimulationRunning()).toBe(false);
     });
 });

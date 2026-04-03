@@ -1,17 +1,23 @@
 import { EyeSimulation } from './simulation/eye';
 
+// Allow checking `require.main` in a TS project without adding Node types.
+declare const require: any;
+
+const simulation = new EyeSimulation();
+
 const startSimulation = () => {
-    const simulation = new EyeSimulation();
     simulation.startSimulation();
 };
 
 const stopSimulation = () => {
-    const simulation = new EyeSimulation();
     simulation.stopSimulation();
 };
 
-// Initialize the simulation
-startSimulation();
-
 // Export functions for potential use in other modules
 export { startSimulation, stopSimulation };
+
+// If this file is executed directly (`node dist/index.js`), start the simulation.
+// This avoids side effects during import (helps tests and reusability).
+if (typeof require !== 'undefined' && require.main === module) {
+    startSimulation();
+}
