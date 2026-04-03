@@ -120,17 +120,8 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     /** Peta Leaflet opsional (mode 2D). Di index.html tidak dipakai — tetap null. */
     let tacticalMap = null;
     let is2DMode = false;
-    const loadedModels = {}; // Cache untuk model yang sudah di-load
-    const modelPaths = {
-        "fixed-wing": "models/airplane.glb",
-        "rotary-wing": "models/helicopter.glb",
-        "SSM": "models/missile.glb",
-        "AGM": "models/missile.glb",
-        "RAM": "models/missile.glb",
-        "PTTA": "models/drone.glb",
-        "EWC": "models/airplane.glb",
-        "unknown": "models/unknown.glb"
-    };
+    const loadedModels = {}; // Cache untuk model yang sudah di-load (isi oleh loadModels)
+    const meshFallbackWarnOnce = new Set();
 
     // --- LOGIKA SIMULASI ---
 
@@ -1040,8 +1031,10 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             newMesh = model.clone(); // Selalu clone, jangan gunakan objek asli
         } else {
             // FALLBACK: Jika file model tidak ditemukan, gunakan bentuk geometri sederhana
-            // Ini memastikan simulasi tetap berjalan dan kita bisa lihat ada sesuatu.
-            console.warn(`Model untuk tipe "${target.type}" tidak ditemukan. Menggunakan bentuk fallback.`);
+            if (!meshFallbackWarnOnce.has(target.type)) {
+                meshFallbackWarnOnce.add(target.type);
+                console.warn(`Model untuk tipe "${target.type}" tidak ditemukan. Menggunakan bentuk fallback.`);
+            }
             let geometry;
             let color = 0xff00ff; // Magenta, warna debug yang bagus
 
@@ -1616,33 +1609,54 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     }
 
     function loadModels() {
-        // Cek apakah THREE.GLTFLoader tersedia
         if (typeof THREE.GLTFLoader === 'undefined') {
             console.error("GLTFLoader tidak ditemukan. Pastikan script CDN dimuat dengan benar.");
-            return Promise.resolve(); // Lanjut dengan fallback geometri dasar
+            return Promise.resolve();
         }
 
         loader = new THREE.GLTFLoader();
 
-        const promises = Object.entries(modelPaths).map(([type, path]) => {
-            return new Promise((resolve, reject) => {
-                loader.load(path, (gltf) => {
-                    // Scaling berdasarkan tipe yang sudah disesuaikan
-                    if (type === 'fixed-wing' || type === 'EWC') gltf.scene.scale.set(15, 15, 15);
-                    else if (['SSM', 'AGM', 'RAM'].includes(type)) gltf.scene.scale.set(8, 8, 8);
-                    else if (type === 'rotary-wing') gltf.scene.scale.set(12, 12, 12);
-                    else gltf.scene.scale.set(5, 5, 5);
+        const applyScaleForType = (type, root) => {
+            if (type === 'fixed-wing' || type === 'EWC') root.scale.set(15, 15, 15);
+            else if (['SSM', 'AGM', 'RAM'].includes(type)) root.scale.set(8, 8, 8);
+            else if (type === 'rotary-wing') root.scale.set(12, 12, 12);
+            else root.scale.set(5, 5, 5);
+        };
 
-                    loadedModels[type] = gltf.scene;
-                    resolve();
-                }, undefined, (error) => {
-                    console.warn(`Info: Model ${type} tidak ditemukan di folder models/. Menggunakan bentuk dasar.`);
-                    // Resolve agar simulasi tetap jalan menggunakan fallback di createTargetMesh
-                    resolve();
-                });
-            });
+        const uniqueByPath = [
+            { path: 'models/airplane.glb', types: ['fixed-wing', 'EWC'] },
+            { path: 'models/helicopter.glb', types: ['rotary-wing'] },
+            { path: 'models/missile.glb', types: ['SSM', 'AGM', 'RAM'] },
+            { path: 'models/drone.glb', types: ['PTTA'] },
+            { path: 'models/unknown.glb', types: ['unknown'] }
+        ];
+
+        const loadPath = (path) => new Promise((resolve) => {
+            loader.load(
+                path,
+                (gltf) => resolve(gltf.scene),
+                undefined,
+                () => {
+                    resolve(null);
+                }
+            );
         });
-        return Promise.all(promises);
+
+        const tasks = uniqueByPath.map(({ path, types }) =>
+            loadPath(path).then((scene) => {
+                if (!scene) {
+                    console.warn(`[GARUDA] GLB tidak dimuat atau tidak valid: ${path} (pakai geometri fallback).`);
+                    return;
+                }
+                types.forEach((type) => {
+                    const root = scene.clone(true);
+                    applyScaleForType(type, root);
+                    loadedModels[type] = root;
+                });
+            })
+        );
+
+        return Promise.all(tasks);
     }
 
     function resetSimulation() {
