@@ -1,6 +1,8 @@
 import random
 import math
 from typing import List, Dict
+from flask import Flask, jsonify
+from flask_cors import CORS
 
 WEATHER_MODIFIERS = {
     "Clear": 1.0,
@@ -20,6 +22,37 @@ class K4IPPEngine:
     def __init__(self):
         self.objects = ["fixed-wing", "rotary-wing", "PTTA", "SSM", "AGM", "RAM", "EWC"]
         self.network_status = "ONLINE"
+        self.targets = [] # Menyimpan state target dunia nyata
+        
+        # Spawn initial targets
+        for i in range(3):
+            self.spawn_target()
+
+    def spawn_target(self):
+        angle = random.uniform(0, 360)
+        dist = random.uniform(30000, 50000)
+        target_id = f"TGT-{random.randint(1000, 9999)}"
+        self.targets.append({
+            "id": target_id,
+            "type": random.choice(self.objects),
+            "x": math.cos(math.radians(angle)) * dist,
+            "y": random.uniform(1000, 5000),
+            "z": math.sin(math.radians(angle)) * dist,
+            "speed": random.uniform(150, 400)
+        })
+
+    def update_targets(self):
+        """Update posisi target (bergerak menuju pusat 0,0,0)"""
+        for t in self.targets:
+            dist = math.sqrt(t['x']**2 + t['z']**2)
+            if dist > 1000:
+                vx = -t['x'] / dist * t['speed']
+                vz = -t['z'] / dist * t['speed']
+                t['x'] += vx
+                t['z'] += vz
+        if len(self.targets) < 2:
+            self.spawn_target()
+
         # Inisialisasi 4 Kapal KRI untuk Patroli (Poin 10.1 Juknis)
         self.kri_assets = [
             {"id": "KRI-01", "angle": 0, "radius": 80000, "range": 70000},
@@ -295,35 +328,40 @@ def decision_support(prioritized: List[Dict], ammo_missile: int = 10, ammo_gun: 
         
     return top_target
 
-def run_cycle(sim, aar):
-    cam = sim.get_camera_data()
-    rad = sim.get_radar_data()
+# --- FLASK SERVER CONFIG ---
+app = Flask(__name__)
+CORS(app)
+sim_engine = K4IPPEngine()
+aar_engine = AAREngine()
+
+@app.route('/api/data', methods=['GET'])
+def get_simulation_data():
+    # 1. Update Lingkungan
+    sim_engine.move_kri_patrol()
+    sim_engine.update_targets()
+    
+    # 2. Simulasi Sensor
+    cam = sim_engine.get_camera_data()
+    rad = sim_engine.get_radar_data()
+    
+    # 3. Pengolahan Data (Fusi & Klasifikasi)
     fused = fuse_data(cam, rad)
     classified = classify_targets(fused)
     prioritized = prioritize_targets(classified)
-    weather = "Clear"
-    recommendation = decision_support(prioritized, weather=weather)
-
-    if recommendation and "PANTAU" not in recommendation.get("weapon_recommendation", ""):
-        weapon = recommendation["weapon_recommendation"]
-        result = evaluate_shot(weapon, recommendation, weather=weather)
-        aar.record_action(recommendation, weapon, result)
-
-    for obj in prioritized:
-        if obj.get("distance", 99999) < 5000:
-            aar.targets_leaked += 1
-
-    print("Camera detections:", cam)
-    print("Radar returns:   ", rad)
-    print("Recommendation:  ", recommendation)
-
-def main():
-    sim = K4IPPEngine() # Memperbaiki referensi class
-    aar = AAREngine()
-    for _ in range(5):
-        sim.move_kri_patrol() # Jalankan pergerakan kapal setiap siklus
-        run_cycle(sim, aar)
-    aar.generate_report()
+    
+    # 4. Rekomendasi Keputusan
+    recommendation = decision_support(prioritized)
+    
+    # Response format sesuai kebutuhan garuda-simulation.js
+    return jsonify({
+        "status": "ONLINE",
+        "ground_truth": sim_engine.targets,
+        "tracks": prioritized,
+        "recommendation": recommendation,
+        "kri_assets": sim_engine.kri_assets
+    })
 
 if __name__ == "__main__":
-    main()
+    print("--- GARUDA EYE BACKEND ACTIVE ---")
+    print("Server running at http://localhost:5000")
+    app.run(port=5000, debug=False)
