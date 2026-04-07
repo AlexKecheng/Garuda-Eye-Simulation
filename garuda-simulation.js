@@ -57,7 +57,7 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     let RADAR_LOCAL_RANGE = 25000;
 
     const VISUAL_RANGE = 15000; // 15 km (Untuk fusi data, tidak mempengaruhi deteksi)
-    let DEFENSE_RADIUS = 5000; // 5 km dari pusat untuk penempatan radar/rudal (diubah ke let)
+    let DEFENSE_RADIUS = 7000; // 7 km dari Akmil sesuai permintaan
     const CRITICAL_RANGE = 5000; // 5 km (Game Over)
     const SIM_TICK = 1000; // Update setiap 1 detik
 
@@ -68,15 +68,15 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
         "NASAMS": { maxRange: 40000, pk: 80, maxAmmo: 6, reloadTime: 10000, cost: 2000 },  // Rp 2 Miliar
         "VL MICA": { maxRange: 20000, pk: 85, maxAmmo: 8, reloadTime: 5000, cost: 1500 },   // Rp 1.5 Miliar
         "Starstreak": { maxRange: 7000, pk: 95, maxAmmo: 12, reloadTime: 3000, cost: 500 }, // Rp 500 Juta
-        "Oerlikon": { maxRange: 4000, pk: 70, maxAmmo: 100, reloadTime: 2000, cost: 5 }     // Rp 5 Juta
+        "S-60 57mm": { maxRange: 6000, pk: 70, maxAmmo: 100, reloadTime: 2000, cost: 8 }     // Rp 8 Juta
     };
 
     // --- STATE SIMULASI ---
     let systemTracks = []; // Apa yang dilihat oleh sistem (hasil fusi)
     let realTargets = [];  // Ground Truth (Posisi asli objek di dunia nyata)
-    const mapCenter = [-7.25, 110.4]; // Konseptual, tidak lagi dipakai untuk render
-    let currentAmmo = { "NASAMS": 6, "VL MICA": 8, "Starstreak": 12, "Oerlikon": 100 };
-    let reloadingStatus = { "NASAMS": false, "VL MICA": false, "Starstreak": false, "Oerlikon": false };
+    const mapCenter = [-7.4914, 110.2178]; // Koordinat Akademi Militer (Akmil), Magelang
+    let currentAmmo = { "NASAMS": 6, "VL MICA": 8, "Starstreak": 12, "S-60 57mm": 100 };
+    let reloadingStatus = { "NASAMS": false, "VL MICA": false, "Starstreak": false, "S-60 57mm": false };
     let radarActive = [true, true, true, true, true, true]; // 6 Unit Arhanud
     let selectedTargetId = null; // ID target yang dipilih manual
     let missionStats = { kills: 0, shots: 0, costSaved: 0, leaked: 0 };
@@ -85,6 +85,8 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     let weaponZoneMeshes = []; // Referensi ke mesh IZ/LRZ
     let defenseSiteMeshes = []; // Menyimpan semua objek 3D dari site pertahanan
     let isGameOver = false;
+    let defenseMarkers2D = []; // Marker Leaflet untuk Radar/Meriam
+    let targetMarkers2D = {};  // Marker Leaflet untuk Target
     let simIntervalId;
 
     // --- KONFIGURASI MCDM (Dynamic Threat Assessment) ---
@@ -127,6 +129,15 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
 
     function getRandomInt(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // Helper Konversi Kartesius ke LatLng untuk Leaflet
+    function cartesianToLatLng(x, z) {
+        const METERS_PER_LAT = 111320;
+        const METERS_PER_LON = 40075000 * Math.cos(mapCenter[0] * Math.PI / 180) / 360;
+        const lat = mapCenter[0] + (z / METERS_PER_LAT);
+        const lon = mapCenter[1] + (x / METERS_PER_LON);
+        return [lat, lon];
     }
 
     // Fungsi Geometri (Dipindahkan ke atas untuk akses global)
@@ -788,8 +799,22 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
         radarRings = [];
         radarMeshes = [];
 
+        // Bersihkan Marker 2D lama
+        if (tacticalMap) {
+            defenseMarkers2D.forEach(m => tacticalMap.removeLayer(m));
+            defenseMarkers2D = [];
+        }
+
         // 2. Buat objek pertahanan baru
         const defenseRadScaled = DEFENSE_RADIUS * SCENE_SCALE;
+
+        // Tambah Objek Vital (IKN) di 2D
+        if (tacticalMap) {
+            const obvitMarker = L.circleMarker(mapCenter, {
+                radius: 10, color: '#00bcd4', fillColor: '#00bcd4', fillOpacity: 0.8
+            }).addTo(tacticalMap).bindTooltip("OBJEK VITAL: AKADEMI MILITER", { permanent: true, direction: 'top' });
+            defenseMarkers2D.push(obvitMarker);
+        }
 
         // Platform Dasar IKN (jika perlu dibuat ulang atau tidak)
         if (!scene.getObjectByName("IKN_Base")) {
@@ -800,7 +825,7 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             baseMesh.name = "IKN_Base";
             scene.add(baseMesh);
         }
-        // Gedung IKN
+        // Gedung Utama Akmil (Visualisasi)
         if (!scene.getObjectByName("IKN_Building")) {
             const iknGeo = new THREE.BoxGeometry(15, 60, 15);
             const iknMat = new THREE.MeshPhongMaterial({ color: 0x00bcd4, shininess: 80 });
@@ -810,13 +835,27 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             scene.add(iknMesh);
         }
 
-        // 2. Satuan Tembak (6 Unit: 3 Rudal, 3 Meriam) Gelar Lingkar
-        for (let i = 0; i < 6; i++) {
-            const angleDeg = i * 60; // 360 / 6 = 60 derajat antar unit
+        // 2. Satuan Tembak: 3 Unit Meriam 57mm (Formasi Segitiga)
+        for (let i = 0; i < 3; i++) {
+            const angleDeg = i * 120; // 360 / 3 = 120 derajat antar unit (Segitiga)
             const angleRad = angleDeg * (Math.PI / 180);
             const x = Math.cos(angleRad) * defenseRadScaled;
             const z = Math.sin(angleRad) * defenseRadScaled;
-            const isRudal = i % 2 === 0; // Bergantian Rudal - Meriam
+
+            // Marker 2D (Leaflet)
+            if (tacticalMap) {
+                const pos2d = cartesianToLatLng(Math.cos(angleRad) * DEFENSE_RADIUS, Math.sin(angleRad) * DEFENSE_RADIUS);
+                const marker = L.circleMarker(pos2d, {
+                    radius: 7,
+                    color: '#ffeb3b',
+                    fillColor: '#ffeb3b',
+                    fillOpacity: 1
+                }).addTo(tacticalMap);
+                
+                const label = `MERIAM 57mm #${i+1}`;
+                marker.bindTooltip(label);
+                defenseMarkers2D.push(marker);
+            }
 
             // Simpan posisi dunia launcher (x, 3, z) -> 3 adalah tinggi launcher
             launcherPositions.push(new THREE.Vector3(x, 3, z));
@@ -1741,6 +1780,29 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             systemTracks = processData(data.camera, data.radar);
             drawTargetsInScene();
             updateUI(systemTracks);
+        }
+
+        // Update Marker 2D untuk Target
+        if (is2DMode && tacticalMap) {
+            // Hapus marker yang tidak ada di realTargets
+            Object.keys(targetMarkers2D).forEach(id => {
+                if (!realTargets.find(t => t.id === id)) {
+                    tacticalMap.removeLayer(targetMarkers2D[id]);
+                    delete targetMarkers2D[id];
+                }
+            });
+
+            // Update atau Tambah marker baru
+            realTargets.forEach(t => {
+                const pos = cartesianToLatLng(t.x, t.z);
+                if (targetMarkers2D[t.id]) {
+                    targetMarkers2D[t.id].setLatLng(pos);
+                } else {
+                    targetMarkers2D[t.id] = L.circleMarker(pos, {
+                        radius: 5, color: '#ff0000', weight: 2
+                    }).addTo(tacticalMap).bindTooltip(t.type.toUpperCase());
+                }
+            });
         }
     }
 
