@@ -851,8 +851,8 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
                     fillColor: '#ffeb3b',
                     fillOpacity: 1
                 }).addTo(tacticalMap);
-                
-                const label = `MERIAM 57mm #${i+1}`;
+
+                const label = `MERIAM 57mm #${i + 1}`;
                 marker.bindTooltip(label);
                 defenseMarkers2D.push(marker);
             }
@@ -1463,7 +1463,11 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
                     if (canvas) canvas.style.display = 'none';
                     if (mapDiv) mapDiv.style.display = 'block';
                     viewBtn.textContent = "🛰️ MODE 3D";
-                    if (typeof L !== 'undefined' && mapDiv && !tacticalMap) initTacticalMap();
+                    if (typeof L !== 'undefined' && mapDiv && !tacticalMap) {
+                        initTacticalMap();
+                        // Panggil ulang layout agar marker meriam digambar di atas peta yang baru aktif
+                        createDefenseLayout();
+                    }
                     if (tacticalMap) setTimeout(() => tacticalMap.invalidateSize(), 50);
                 } else {
                     if (canvas) canvas.style.display = 'block';
