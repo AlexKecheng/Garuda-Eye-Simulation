@@ -286,15 +286,29 @@
             font-size: 0.7rem !important;
             font-weight: bold;
             box-shadow: 0 0 10px rgba(3, 218, 198, 0.4);
-            pointer-events: none; /* Agar tidak menghalangi interaksi peta */
+            pointer-events: none;
+            /* Agar tidak menghalangi interaksi peta */
             padding: 2px 5px;
             border-radius: 2px;
         }
 
         /* Indikator Dinamika Vertikal */
-        .arrow-up { color: #81c784; margin-left: 4px; text-shadow: 0 0 5px #81c784; }
-        .arrow-down { color: #cf6679; margin-left: 4px; text-shadow: 0 0 5px #be5f71; }
-        .arrow-level { color: #ffeb3b; margin-left: 4px; }
+        .arrow-up {
+            color: #81c784;
+            margin-left: 4px;
+            text-shadow: 0 0 5px #81c784;
+        }
+
+        .arrow-down {
+            color: #cf6679;
+            margin-left: 4px;
+            text-shadow: 0 0 5px #be5f71;
+        }
+
+        .arrow-level {
+            color: #ffeb3b;
+            margin-left: 4px;
+        }
 
         /* Animasi Berkedip untuk Ancaman Kritis */
         .blink-critical {
@@ -454,7 +468,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- Simulasi browser-only. Untuk Python: set window.GARUDA_PYTHON=true di baris di bawah -->
-    <script>window.GARUDA_PYTHON = false;</script>
+    <script>window.GARUDA_PYTHON = true;</script>
     <script src="garuda-simulation.js?v=5"></script>
 </body>
 

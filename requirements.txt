@@ -1,0 +1,9 @@
+# Web Framework & API
+Flask>=3.0.0
+Flask-CORS>=4.0.0
+
+# Fuzzy Logic & Decision Support System
+scikit-fuzzy==0.4.2
+
+# Numerical Processing (Dependency for scikit-fuzzy)
+numpy>=1.24.0
