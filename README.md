@@ -1,55 +1,28 @@
-# Garuda Eye Simulation
+# Garuda Eye - Air Defense Simulation
 
-## Overview
-The Garuda Eye Simulation project is designed to simulate the behavior of the Garuda Eye system. This project includes various components that work together to provide a comprehensive simulation experience.
+Sistem Simulasi Taktik Integrasi Arhanud berbasis Python dan Three.js untuk mendukung pengambilan keputusan melalui sistem K4IPP.
 
-## Project Structure
-```
-garuda-eye-simulation
-├── src
-│   ├── index.ts
-│   ├── simulation
-│   │   └── eye.ts
-│   ├── models
-│   │   └── data.ts
-│   └── utils
-│       └── helpers.ts
-├── tests
-│   └── simulation.test.ts
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+## Fitur Utama
+- **Sensor Fusion**: Integrasi data Radar dan Kamera.
+- **Fuzzy-SAW Decision Support**: Prioritas ancaman menggunakan logika fuzzy.
+- **3D Tactical Visualization**: Visualisasi real-time menggunakan Three.js.
+- **AAR (After Action Review)**: Laporan efektivitas operasi.
 
-## Installation
-To get started with the Garuda Eye Simulation, clone the repository and install the necessary dependencies:
+## Cara Menjalankan
 
+### 1. Backend (Python)
+Pastikan telah menginstal dependency:
 ```bash
-git clone <repository-url>
-cd garuda-eye-simulation
-npm install
+pip install flask flask-cors scikit-fuzzy
 ```
-
-## Usage
-To run the simulation, execute the following command:
-
+Jalankan server:
 ```bash
-npm start
+python main.py
 ```
 
-This command builds the TypeScript sources and then runs the simulation entry point.
+### 2. Frontend
+Buka file `index.html` di browser Anda.
 
-## Testing
-To run the unit tests for the EyeSimulation class, use the following command:
-
-```bash
-npm test
-```
-
-This will execute the tests defined in `tests/simulation.test.ts`.
-
-## Contributing
-Contributions are welcome! Please submit a pull request or open an issue for any enhancements or bug fixes.
-
-## License
-This project is licensed under the MIT License. See the LICENSE file for more details.
+## Teknologi
+- Python (Flask, Scikit-Fuzzy)
+- JavaScript (Three.js, Leaflet.js)

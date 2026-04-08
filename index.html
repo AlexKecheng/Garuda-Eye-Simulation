@@ -276,6 +276,30 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Gaya Label Taktis (Radar Style) */
+        .tactical-label {
+            background: rgba(5, 8, 20, 0.85) !important;
+            border: 1px solid #03dac6 !important;
+            color: #03dac6 !important;
+            font-family: 'Courier New', monospace;
+            font-size: 0.7rem !important;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(3, 218, 198, 0.4);
+            pointer-events: none; /* Agar tidak menghalangi interaksi peta */
+            padding: 2px 5px;
+            border-radius: 2px;
+        }
+
+        /* Indikator Dinamika Vertikal */
+        .arrow-up { color: #81c784; margin-left: 4px; text-shadow: 0 0 5px #81c784; }
+        .arrow-down { color: #cf6679; margin-left: 4px; text-shadow: 0 0 5px #be5f71; }
+        .arrow-level { color: #ffeb3b; margin-left: 4px; }
+
+        /* Animasi Berkedip untuk Ancaman Kritis */
+        .blink-critical {
+            animation: blink 0.5s infinite;
+        }
     </style>
 </head>
 

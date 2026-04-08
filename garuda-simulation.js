@@ -87,6 +87,8 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
     let isGameOver = false;
     let defenseMarkers2D = []; // Marker Leaflet untuk Radar/Meriam
     let targetMarkers2D = {};  // Marker Leaflet untuk Target
+    let debrisMarkers2D = {};  // Marker Leaflet untuk Puing
+    let targetTrails2D = {};   // Polyline Leaflet untuk Jejak Target
     let simIntervalId;
 
     // --- KONFIGURASI MCDM (Dynamic Threat Assessment) ---
@@ -855,6 +857,16 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
                 const label = `MERIAM 57mm #${i + 1}`;
                 marker.bindTooltip(label);
                 defenseMarkers2D.push(marker);
+
+                // Lingkaran Jangkauan Tembak Meriam (Diameter 7km -> Radius 3500m)
+                const rangeCircle = L.circle(pos2d, {
+                    radius: 3500,
+                    color: '#ff0000',
+                    fillColor: '#ff0000',
+                    fillOpacity: 0.15,
+                    weight: 1
+                }).addTo(tacticalMap);
+                defenseMarkers2D.push(rangeCircle);
             }
 
             // Simpan posisi dunia launcher (x, 3, z) -> 3 adalah tinggi launcher
@@ -883,6 +895,20 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
 
             scene.add(siteGroup);
             defenseSiteMeshes.push(siteGroup); // Tambahkan ke daftar untuk dihapus nanti
+
+            // Visual Jangkauan Tembak 3D (Merah Transparan, Radius 3.5km)
+            const firingRangeGeo = new THREE.RingGeometry(3500 * SCENE_SCALE - 5, 3500 * SCENE_SCALE, 64);
+            const firingRangeMat = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.3
+            });
+            const firingRangeMesh = new THREE.Mesh(firingRangeGeo, firingRangeMat);
+            firingRangeMesh.rotation.x = -Math.PI / 2;
+            firingRangeMesh.position.set(x, 2, z); // Sedikit di atas grid agar tidak z-fighting
+            scene.add(firingRangeMesh);
+            defenseSiteMeshes.push(firingRangeMesh);
 
             // Visual Lingkaran Radar (2D Ring) per unit
             // Tebalkan ring agar terlihat dari jauh (dari 1 unit ke 10 unit)
@@ -1743,6 +1769,15 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             scene.remove(groupOrParticle);
         });
         // Bersihkan interceptor
+        
+        // Bersihkan Marker & Jejak 2D
+        if (tacticalMap) {
+            Object.values(targetMarkers2D).forEach(m => tacticalMap.removeLayer(m));
+            Object.values(targetTrails2D).forEach(t => tacticalMap.removeLayer(t));
+        }
+        targetMarkers2D = {};
+        targetTrails2D = {};
+
         activeInterceptors.forEach(i => scene.remove(i.mesh));
         activeInterceptors = [];
 
@@ -1785,29 +1820,125 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
             drawTargetsInScene();
             updateUI(systemTracks);
         }
+        
+        // Sinkronisasi Marker 2D (Peta) dengan Objek 3D
+        sync2DMarkers();
+    }
 
-        // Update Marker 2D untuk Target
-        if (is2DMode && tacticalMap) {
-            // Hapus marker yang tidak ada di realTargets
-            Object.keys(targetMarkers2D).forEach(id => {
-                if (!realTargets.find(t => t.id === id)) {
-                    tacticalMap.removeLayer(targetMarkers2D[id]);
-                    delete targetMarkers2D[id];
+    /**
+     * Memastikan semua target di realTargets memiliki marker yang sesuai di Leaflet.
+     * Marker akan sinkron secara jumlah, posisi, dan tipe (via label).
+     */
+    function sync2DMarkers() {
+        if (!tacticalMap) return;
+
+        // 1. Hapus marker 2D yang target aslinya sudah tidak ada (hancur/keluar jangkauan)
+        Object.keys(targetMarkers2D).forEach(id => {
+            if (!realTargets.find(t => t.id === id)) {
+                tacticalMap.removeLayer(targetMarkers2D[id]);
+                delete targetMarkers2D[id];
+                
+                if (targetTrails2D[id]) {
+                    tacticalMap.removeLayer(targetTrails2D[id]);
+                    delete targetTrails2D[id];
                 }
-            });
+                // Hapus juga marker puing jika targetnya hilang
+                if (debrisMarkers2D[id]) {
+                    tacticalMap.removeLayer(debrisMarkers2D[id]);
+                    delete debrisMarkers2D[id];
+                }
+            }
+        });
 
-            // Update atau Tambah marker baru
-            realTargets.forEach(t => {
-                const pos = cartesianToLatLng(t.x, t.z);
-                if (targetMarkers2D[t.id]) {
-                    targetMarkers2D[t.id].setLatLng(pos);
+        // 2. Tambah atau Perbarui posisi marker 2D berdasarkan data realTargets
+        realTargets.forEach(t => {
+            const pos = cartesianToLatLng(t.x, t.z);
+            const altKm = (t.y / 1000).toFixed(1);
+
+            let altArrow = '';
+            let arrowClass = 'arrow-level';
+            if (t.vy !== undefined) {
+                const verticalThreshold = 5; // m/s, ambang batas untuk dianggap naik/turun
+                if (t.vy > verticalThreshold) {
+                    altArrow = '<span class="arrow-up">▲</span>'; // Panah atas
+                    arrowClass = 'arrow-up';
+                } else if (t.vy < -verticalThreshold) {
+                    altArrow = '<span class="arrow-down">▼</span>'; // Panah bawah
+                    arrowClass = 'arrow-down';
+                }
+            }
+            const labelContent = `${t.type.toUpperCase()}<br>ALT: ${altKm} km ${altArrow}`;
+
+            if (targetMarkers2D[t.id]) {
+                targetMarkers2D[t.id].setLatLng(pos);
+                targetMarkers2D[t.id].setTooltipContent(labelContent);
+            } else {
+                // Gunakan warna berbeda berdasarkan ancaman (opsional, default merah)
+                targetMarkers2D[t.id] = L.circleMarker(pos, {
+                    radius: 6,
+                    color: '#ff1744',
+                    fillColor: '#ff1744',
+                    fillOpacity: 0.8,
+                    weight: 2
+                }).addTo(tacticalMap).bindTooltip(labelContent, {
+                    permanent: true,
+                    direction: 'right',
+                    className: 'tactical-label'
+                });
+            }
+
+            if (!targetTrails2D[t.id]) {
+                // Tentukan warna berdasarkan klasifikasi target
+                let trailColor = '#ff1744'; // Default: Merah (Missile/Target Umum)
+                const type = t.type.toLowerCase();
+                if (type.includes('rotary') || type.includes('helicopter')) trailColor = '#ffeb3b'; // Kuning
+                else if (type.includes('fixed') || type.includes('airplane') || type === 'ewc') trailColor = '#03dac6'; // Cyan
+                else if (type === 'ptta' || type === 'drone') trailColor = '#81c784'; // Hijau
+                // Gunakan LayerGroup untuk menampung segmen-segmen garis yang memudar
+                targetTrails2D[t.id] = L.layerGroup().addTo(tacticalMap);
+                targetTrails2D[t.id].points = [];
+                targetTrails2D[t.id].color = trailColor;
+            }
+
+            const trailGroup = targetTrails2D[t.id];
+            trailGroup.points.push(pos);
+            
+            // Batasi panjang jejak (20 titik untuk transisi yang lebih halus)
+            if (trailGroup.points.length > 20) trailGroup.points.shift();
+
+            // Gambar ulang segmen dengan gradasi opacity dan weight (Tapering Effect)
+            trailGroup.clearLayers();
+            for (let i = 0; i < trailGroup.points.length - 1; i++) {
+                const progress = (i + 1) / trailGroup.points.length; // 0.0 (ujung) -> 1.0 (kepala)
+                L.polyline([trailGroup.points[i], trailGroup.points[i + 1]], {
+                    color: trailGroup.color,
+                    weight: 1 + (2.5 * progress), // Semakin tebal di dekat target
+                    opacity: 0.7 * progress,      // Semakin pudar di ujung jejak
+                    dashArray: '2, 4',            // Dash lebih rapat untuk kesan high-tech
+                    interactive: false
+                }).addTo(trailGroup);
+            }
+
+            // 4. Visualisasi Puing (Debris Footprint) - Sinkron dari Python
+            if (t.debris_analysis) {
+                const impactPos = cartesianToLatLng(t.debris_analysis.impact_x, t.debris_analysis.impact_z);
+                const riskColor = t.debris_analysis.risk === "CRITICAL" ? "#cf6679" : (t.debris_analysis.risk === "WARNING" ? "#ffeb3b" : "#81c784");
+                const impactRadius = t.debris_analysis.risk === "CRITICAL" ? 1000 : 500;
+
+                if (!debrisMarkers2D[t.id]) {
+                    debrisMarkers2D[t.id] = L.circle(impactPos, {
+                        radius: impactRadius,
+                        color: riskColor,
+                        fillColor: riskColor,
+                        fillOpacity: 0.2,
+                        weight: 1
+                    }).addTo(tacticalMap);
                 } else {
-                    targetMarkers2D[t.id] = L.circleMarker(pos, {
-                        radius: 5, color: '#ff0000', weight: 2
-                    }).addTo(tacticalMap).bindTooltip(t.type.toUpperCase());
+                    debrisMarkers2D[t.id].setLatLng(impactPos).setRadius(impactRadius).setStyle({ color: riskColor, fillColor: riskColor, opacity: 0.8 });
                 }
-            });
-        }
+                debrisMarkers2D[t.id].bindTooltip(`TITIK JATUH PUING: ${debris.risk}`, { className: 'tactical-label' });
+            }
+        });
     }
 
     function animate() {
@@ -1819,9 +1950,9 @@ Tujuan: Untuk mengevaluasi performa berbagai konfigurasi pertahanan terhadap ske
         updateInterceptors(delta); // Update pergerakan rudal pertahanan
 
         // Animasikan visual (Radar, Ledakan, Asap) dengan halus
-        const rotationSpeed = 1.0 * delta;
-        radarMeshes.forEach(radar => {
-            radar.rotation.y += rotationSpeed;
+        radarMeshes.forEach((radar, i) => {
+            // Radar hanya berputar jika status aktif
+            if (radarActive[i]) radar.rotation.y += 1.5 * delta;
         });
 
         // INTERPOLASI & UPDATE VISUAL TARGET
